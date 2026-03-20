@@ -1,0 +1,116 @@
+{
+  "figma_buzz": {
+    "webinar_event_banners": {
+      "name": "Webinar and Live Event Banners",
+      "use": [
+        "Speaker announcements",
+        "Time and date promotions",
+        "Location based event banners",
+        "Standard event promotion assets"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/project/479301084"
+    },
+    "hiring_recruitment_banners": {
+      "name": "Hiring and Recruitment Banners",
+      "use": [
+        "Open roles",
+        "Recruitment campaigns",
+        "Hiring social graphics"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/project/[REDACTED_US_SSN_1]?fuid=1496250245644932828"
+    },
+    "email_banners": {
+      "name": "Email Banners",
+      "use": [
+        "Campaign email headers",
+        "Webinar email promotions",
+        "Product email banners"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/project/546663502?fuid=1496250245644932828"
+    },
+    "ingoodcompany_events": {
+      "name": "InGoodCompany Events",
+      "use": [
+        "InGoodCompany event promotional assets",
+        "Social, email, and web variations tied to IGC"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/project/[REDACTED_US_SSN_2]?fuid=1496250245644932828"
+    },
+    "partner_marketing_events": {
+      "name": "Partner Marketing Events",
+      "use": [
+        "Partner event promotions",
+        "Co-marketing banners",
+        "Partner specific event graphics"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/project/480134740?fuid=1496250245644932828"
+    },
+    "seo_designs": {
+      "name": "SEO Designs",
+      "use": [
+        "Blog feature images",
+        "Resource page visuals",
+        "SEO landing page graphics"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/project/510277506?fuid=1496250245644932828"
+    },
+    "project_level_hub": {
+      "name": "Project-Level Figma Buzz Access",
+      "use": [
+        "Directing current Buzz users to full project hub",
+        "Broad access to templated production assets"
+      ],
+      "link": "https://www.figma.com/files/890585396802155687/team/1562592354426841813?fuid=1496250245644932828"
+    }
+  },
+  "asana_forms": {
+    "figma_buzz_access_request": {
+      "name": "Figma Buzz Access Request",
+      "use": [
+        "Requesting access to Figma Buzz",
+        "Teams that need recurring asset creation",
+        "New hires who require template access"
+      ],
+      "link": "https://form.asana.com/?k=72I5OMaH5uf-f6MLeAePww&d=103035621276259"
+    },
+    "figma_buzz_template_request": {
+      "name": "Figma Buzz Template Request",
+      "use": [
+        "Requesting a new template not currently supported",
+        "Expansion of existing template categories",
+        "New recurring asset format"
+      ],
+      "link": "https://form.asana.com/?k=cselXHAkJ4WeL1rggtBKHQ&d=103035621276259"
+    },
+    "general_creative_services": {
+      "name": "General Creative Services Form",
+      "use": [
+        "Custom design work",
+        "One pagers",
+        "External decks",
+        "Graphics and illustrations",
+        "Event assets",
+        "Physical materials",
+        "Non-templated banner work",
+        "Larger video edits",
+        "Content, blog, and guide design"
+      ],
+      "link": "https://form.asana.com/?k=MeL3tQxniFdOrwSYrl_zBg&d=103035621276259"
+    },
+    "creative_review": {
+      "name": "Creative Review Form",
+      "use": [
+        "Reviewing agency produced materials",
+        "Reviewing contractor event assets",
+        "Campaign assets not created by Brand",
+        "Governance and brand compliance checks"
+      ],
+      "link": "https://form.asana.com/?k=BY0vP2hOdUhQKRcrt1zGGw&d=103035621276259"
+    }
+  },
+  "meta": {
+    "last_updated": "2026-03-12",
+    "host": "birdasaurus.com",
+    "notes": "Edit this file to change links. The bot should re-read periodically or on demand."
+  }
+}

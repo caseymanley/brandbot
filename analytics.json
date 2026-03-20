@@ -1,0 +1,283 @@
+{
+  "events": [
+    {
+      "type": "brief_submitted",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T19:29:10.272Z",
+      "requestName": "Request for a video edit for external content.",
+      "assetType": "video",
+      "team": "Performance Marketing",
+      "taskGid": "1213747933873795"
+    },
+    {
+      "type": "brief_submitted",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T21:36:29.140Z",
+      "requestName": "Request for a new one-pager with approved messaging routed to General Creative Services.",
+      "assetType": "one_pager",
+      "team": "Performance Marketing",
+      "taskGid": "1213748858643984"
+    },
+    {
+      "type": "brief_submitted",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T21:43:35.170Z",
+      "requestName": "Request for a deck for an internal hands meeting routed to Creative Services.",
+      "assetType": "deck",
+      "team": "Performance Marketing",
+      "taskGid": "1213748793784608"
+    },
+    {
+      "type": "brief_submitted",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T21:54:52.862Z",
+      "requestName": "Request for a new illustration.",
+      "assetType": "artwork",
+      "team": "Regional Marketing",
+      "taskGid": "1213749091516793"
+    },
+    {
+      "type": "brief_submitted",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T21:58:33.737Z",
+      "requestName": "Request for a new illustration brief.",
+      "assetType": "artwork",
+      "team": "Performance Marketing",
+      "taskGid": "1213748794731225"
+    },
+    {
+      "type": "brief_submitted",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:35:04.568Z",
+      "requestName": "Request for a new illustration routed to Creative Services.",
+      "assetType": "artwork",
+      "team": "Performance Marketing",
+      "taskGid": "1213749084969213"
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:40:53.902Z",
+      "assetName": "Puzzle",
+      "category": "illustration",
+      "searchTags": [
+        "collaboration",
+        "teamwork",
+        "people",
+        "working together",
+        "cooperation"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:40:56.303Z",
+      "assetName": "Together",
+      "category": "illustration",
+      "searchTags": [
+        "collaboration",
+        "teamwork",
+        "people",
+        "working together",
+        "cooperation"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:40:58.447Z",
+      "assetName": "Partnership",
+      "category": "illustration",
+      "searchTags": [
+        "collaboration",
+        "teamwork",
+        "people",
+        "working together",
+        "cooperation"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:42:41.352Z",
+      "assetName": "HiBobLogo-CMYK-Color",
+      "category": "logo",
+      "searchTags": [
+        "brand colors",
+        "color palette",
+        "HiBob colors"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:42:43.684Z",
+      "assetName": "Square_HiBob_logo_with Color Background",
+      "category": "logo",
+      "searchTags": [
+        "brand colors",
+        "color palette",
+        "HiBob colors"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:42:46.105Z",
+      "assetName": "Round_HiBob_logo_with Color Background",
+      "category": "logo",
+      "searchTags": [
+        "brand colors",
+        "color palette",
+        "HiBob colors"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:52:15.731Z",
+      "assetName": "Together",
+      "category": "illustration",
+      "searchTags": [
+        "teamwork",
+        "collaboration",
+        "people",
+        "working together",
+        "unity"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:52:15.734Z",
+      "assetName": "People Together",
+      "category": "illustration",
+      "searchTags": [
+        "teamwork",
+        "collaboration",
+        "people",
+        "working together",
+        "unity"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:52:15.734Z",
+      "assetName": "Puzzle",
+      "category": "illustration",
+      "searchTags": [
+        "teamwork",
+        "collaboration",
+        "people",
+        "working together",
+        "unity"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:53:08.623Z",
+      "assetName": "HiBobLogo-CMYK-Inverse",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:53:08.624Z",
+      "assetName": "HiBobLogo-CMYK-Color",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:53:08.625Z",
+      "assetName": "Bob Platform Black 1024x1024-1",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:58:31.342Z",
+      "assetName": "HiBobLogo-CMYK-Inverse",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob",
+        "cmyk"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:58:31.348Z",
+      "assetName": "HiBobLogo-CMYK-Color",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob",
+        "cmyk"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T22:58:31.350Z",
+      "assetName": "Bob Platform Black 1024x1024-1",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob",
+        "cmyk"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T23:03:53.366Z",
+      "assetName": "HiBob_logo_for_light_BG",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob",
+        "light"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T23:03:53.369Z",
+      "assetName": "HiBob_logo_for_light_BG",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob",
+        "light"
+      ]
+    },
+    {
+      "type": "asset_delivered",
+      "userId": "U08KBKRCNG4",
+      "timestamp": "2026-03-20T23:03:53.370Z",
+      "assetName": "Bob Platform Black 1024x1024-1",
+      "category": "logo",
+      "searchTags": [
+        "logo",
+        "hibob",
+        "light"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "approved_agencies": [
+    {
+      "name": "Chemistry",
+      "aliases": ["Chemistry Agency"],
+      "onboarded": true
+    },
+    {
+      "name": "Graphic Power",
+      "aliases": [],
+      "onboarded": true
+    },
+    {
+      "name": "Strange Family",
+      "aliases": [],
+      "onboarded": true
+    },
+    {
+      "name": "Pink Chili",
+      "aliases": ["PinkChili"],
+      "onboarded": true
+    },
+    {
+      "name": "Local Glimpse",
+      "aliases": ["Benja", "Local Glimpse AKA Benja"],
+      "onboarded": true
+    },
+    {
+      "name": "Gio Conesa",
+      "aliases": [],
+      "onboarded": true
+    },
+    {
+      "name": "Possimpible Studio",
+      "aliases": ["Possimpible"],
+      "onboarded": true
+    },
+    {
+      "name": "Ellen Wong",
+      "aliases": [],
+      "onboarded": true
+    },
+    {
+      "name": "Chris Jensen",
+      "aliases": [],
+      "onboarded": true
+    }
+  ],
+  "notes": "Add new agencies here. Set onboarded: false for agencies pending onboarding. The bot uses fuzzy matching on name + aliases."
+}

@@ -1,0 +1,23 @@
+{
+  "admin": {
+    "description": "Full access including direct form access, analytics queries, and admin commands",
+    "users": [
+      "U031RNGSWAH",
+      "U09KKHRCZPF",
+      "U0772AR5G80",
+      "U09QTFNGM5W",
+      "U07NMP7L8UA",
+      "USJF9JZ4J",
+      "U08KBKRCNG4"
+    ]
+  },
+  "full": {
+    "description": "Full intake access including forms, file requests, and all bot features",
+    "users": []
+  },
+  "limited": {
+    "description": "Can ask brand questions and receive assets, but cannot submit intake forms",
+    "users": []
+  },
+  "notes": "Add Slack user IDs (e.g. U01ABC123). Find user IDs by clicking a user's profile in Slack > More > Copy member ID."
+}

@@ -1,0 +1,49 @@
+{
+  "requester_people": "1203562585378617",
+  "requester_team": {
+    "gid": "1205680583711351",
+    "options": {
+      "performance_marketing": "1205680583711352",
+      "regional_marketing": "1205680583711354",
+      "product_marketing": "1205680583711356",
+      "customer_marketing": "1205680583711357",
+      "partner_marketing": "1205680583711358",
+      "analysts_influencers": "1205680583711359",
+      "pr": "1205680583711360",
+      "seo": "1208075995830064",
+      "editorial_calendar": "1205730251342232",
+      "other": "1205680583711361"
+    }
+  },
+  "requested_due_date": "1213747321886624",
+  "event": {
+    "gid": "1160333684932240",
+    "options": {
+      "yes": "1160333684932241",
+      "no": "1160333684932242"
+    }
+  },
+  "asset_type": {
+    "gid": "1213747321886612",
+    "options": {
+      "banners_social_ads": "1213747321886613",
+      "video": "1213747321886614",
+      "artwork_event_assets": "1213747321886615",
+      "content_review": "1213747321886616",
+      "content_creation_copy": "1213747321886617",
+      "one_pager": "1213747321886618",
+      "deck_presentation": "1213747321886619",
+      "swag_physical": "1213747321886620",
+      "illustration_custom_graphic": "1213747321886621",
+      "campaign_system": "1213747321886622"
+    }
+  },
+  "project_manager": "1213747321886627",
+  "net_new_or_revision": {
+    "gid": "1213747321902447",
+    "options": {
+      "net_new": "1213747321902448",
+      "revision": "1213747321902449"
+    }
+  }
+}
