@@ -1,0 +1,75 @@
+[
+  {
+    "version": "1.0.0",
+    "date": "2026-03-12",
+    "changes": [
+      "Initial BrandBot — conversational intake routing with GPT-4o",
+      "Asana task creation with conversation context in notes",
+      "Asset delivery from Google Drive with AI-analyzed catalog",
+      "Brand knowledge Q&A embedded in system prompt",
+      "Permission tiers (admin/full/limited)",
+      "Agency whitelist management",
+      "File attachments to Asana tasks (10-min window)",
+      "Analytics tracking to #brandbot-ops",
+      "Admin commands: Asana queries, analytics, debug"
+    ]
+  },
+  {
+    "version": "1.1.0",
+    "date": "2026-03-18",
+    "changes": [
+      "Multi-step dynamic Creative Brief form (Step 1 → asset-type-specific Step 2)",
+      "6 asset type configurations: Banners, Video, Artwork, One-Pager, Deck, Print",
+      "Content Review and Campaign System redirect flows",
+      "Strategic escalation expanded: events, campaigns, feature launches",
+      "Asana custom fields mapping (asset type, team, due date, event, net new/revision)",
+      "Requester auto-population via Slack email → Asana user lookup",
+      "Whitelist management commands (add/remove admin/full/limited)",
+      "Persistent analytics.json with query commands"
+    ]
+  },
+  {
+    "version": "1.2.0",
+    "date": "2026-03-20",
+    "changes": [
+      "Custom fields now populate in Asana (created custom-fields.json)",
+      "Asset type pre-populated and locked in form based on conversation context",
+      "Rich text (html_notes) for Asana task descriptions with bold labels",
+      "Submitter name and email from Slack profile in task description",
+      "Assignee set via email on Asana task creation",
+      "SLA warnings — alerts when due date is tighter than standard turnaround",
+      "Smarter asset search — template vs asset clarification, size recommendations",
+      "Banner/CMYK leakage fixed with score penalties in search",
+      "Re-scan command from Slack (rescan assets / full rescan)",
+      "debug catalog command — asset catalog stats",
+      "Channel-based permission management (#brandbot-ops only)",
+      "my tasks — any user can check their assigned tasks",
+      "my requests / request status — ticket status lookup for all users",
+      "team tasks [name] — admin query for team-specific tasks due this week",
+      "Analytics dashboard — 90-day comprehensive view",
+      "Weekly analytics digest — auto-posts Mondays at 9 AM",
+      "Bundled asset delivery — all files in a single Slack message",
+      "Smarter logo delivery — asks about use case, serves correct variant",
+      "Brand questions no longer trigger asset search",
+      "ABX and Regional Marketing (US/CA) removed from team dropdown (not in Asana)"
+    ]
+  },
+  {
+    "version": "1.3.0",
+    "date": "2026-03-25",
+    "changes": [
+      "Onboarding flow — first-time users set their team via modal before chatting",
+      "User profiles (user-profiles.json) — persistent team storage",
+      "Team auto-populates in Creative Brief form from user profile",
+      "set team / my team commands for all users",
+      "my analytics — personal 90-day activity breakdown",
+      "intake command — admin shortcut to open Creative Brief directly",
+      "full rescan — admin command to delete catalog and rebuild from scratch",
+      "Version log — changelog.json with version command",
+      "Animation/video screening fix — qualifying questions required before escalation",
+      "Figma Buzz routing fix — no longer sends assets alongside template links",
+      "Slide template fix — Google Slides link only, no Buzz links",
+      "Deployed to Railway"
+    ]
+  }
+]

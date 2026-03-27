@@ -456,12 +456,140 @@ function loadRegistry() {
 loadRegistry();
 
 // ────────────────────────────────────────────
+// Onboarding flow — first-time users pick their team
+// ────────────────────────────────────────────
+function isOnboarded(userId) {
+  return !!userProfiles[userId]?.team;
+}
+
+function buildOnboardingBlocks() {
+  return [
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `:wave: *Welcome to BrandBot!*\n\nI'm the Brand Services intake advisor for HiBob. Before we get started, I need to know which team you're on — this helps me route your requests and track analytics.\n\nSelect your team below and hit *Done*.` },
+    },
+    { type: "divider" },
+    {
+      type: "input", block_id: "onboard_team_block",
+      label: { type: "plain_text", text: "What team are you on?" },
+      element: {
+        type: "static_select", action_id: "onboard_team_input",
+        options: null, // TEAM_OPTIONS injected at runtime
+      },
+    },
+  ];
+}
+
+async function showOnboarding(userId, triggerId, client) {
+  const blocks = buildOnboardingBlocks();
+  const teamBlock = blocks.find(b => b.block_id === "onboard_team_block");
+  if (teamBlock) teamBlock.element.options = TEAM_OPTIONS;
+
+  await client.views.open({
+    trigger_id: triggerId,
+    view: {
+      type: "modal",
+      callback_id: "onboarding_submit",
+      title: { type: "plain_text", text: "Welcome to BrandBot" },
+      submit: { type: "plain_text", text: "Done" },
+      blocks,
+    },
+  });
+}
+
+app.action("start_onboarding", async ({ body, ack, client }) => {
+  await ack();
+  await showOnboarding(body.user.id, body.trigger_id, client);
+});
+
+app.view("onboarding_submit", async ({ ack, view, body, client }) => {
+  const userId = body.user.id;
+  const vals = view.state.values;
+  const team = vals.onboard_team_block.onboard_team_input.selected_option;
+
+  setUserTeam(userId, team.text.text);
+
+  // Mark onboarding complete
+  if (!userProfiles[userId]) userProfiles[userId] = {};
+  userProfiles[userId].onboarded_at = new Date().toISOString();
+  saveUserProfiles();
+
+  await ack();
+
+  // Send intro message
+  await client.chat.postMessage({
+    channel: userId,
+    text: [
+      `:white_check_mark: You're all set! Team: *${team.text.text}*`,
+      ``,
+      `Here's what I can help you with:`,
+      ``,
+      `*:art: Request creative work* — Tell me what you need (a banner, deck, one-pager, video, illustration) and I'll route it to the right place.`,
+      `*:mag: Find brand assets* — Ask for illustrations, icons, logos, or shapes from our library and I'll send them to you.`,
+      `*:book: Brand questions* — Colors, fonts, voice, logo usage — I know it all.`,
+      `*:clipboard: Check request status* — Type \`my requests\` to see where your submissions stand.`,
+      `*:bar_chart: Your analytics* — Type \`my analytics\` for a personal activity summary.`,
+      ``,
+      `You can also update your team anytime with \`set team [name]\`.`,
+      ``,
+      `Go ahead — tell me what you need!`,
+    ].join("\n"),
+  });
+
+  console.log(`[ONBOARD] User ${userId} onboarded: team=${team.text.text}`);
+});
+
+// ────────────────────────────────────────────
+// Version log
+// ────────────────────────────────────────────
+const CHANGELOG_FILE = path.resolve(__dirname, "changelog.json");
+let changelog = [];
+
+function loadChangelog() {
+  if (fs.existsSync(CHANGELOG_FILE)) {
+    try { changelog = JSON.parse(fs.readFileSync(CHANGELOG_FILE, "utf8")); } catch { changelog = []; }
+  }
+}
+loadChangelog();
+// sessions[userId] = { messages: [...], lastActivity: timestamp }
+// ────────────────────────────────────────────
 // Session store — real conversation history
 // ────────────────────────────────────────────
-// sessions[userId] = { messages: [...], lastActivity: timestamp }
 const sessions = {};
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_HISTORY = 20; // keep last 20 messages (10 turns)
+
+// ────────────────────────────────────────────
+// User profiles — persistent team + preferences
+// ────────────────────────────────────────────
+const USER_PROFILES_FILE = path.resolve(__dirname, "user-profiles.json");
+let userProfiles = {};
+
+function loadUserProfiles() {
+  if (fs.existsSync(USER_PROFILES_FILE)) {
+    try {
+      userProfiles = JSON.parse(fs.readFileSync(USER_PROFILES_FILE, "utf8"));
+      console.log(`User profiles loaded: ${Object.keys(userProfiles).length} users`);
+    } catch { userProfiles = {}; }
+  }
+}
+loadUserProfiles();
+
+function saveUserProfiles() {
+  try { fs.writeFileSync(USER_PROFILES_FILE, JSON.stringify(userProfiles, null, 2)); } catch (err) {
+    console.error("[PROFILES] Save failed:", err.message);
+  }
+}
+
+function setUserTeam(userId, teamName) {
+  if (!userProfiles[userId]) userProfiles[userId] = {};
+  userProfiles[userId].team = teamName;
+  saveUserProfiles();
+}
+
+function getUserTeam(userId) {
+  return userProfiles[userId]?.team || null;
+}
 
 function getSession(userId) {
   const now = Date.now();
@@ -754,6 +882,8 @@ Includes: webinar/event banners, hiring/recruitment banners, email banners, InGo
 
 Typical outputs: social posts, paid ads, meta images for hibob.com, website banners, lobby images, email banners, email signatures.
 
+*CRITICAL: When routing to a Figma Buzz template, do NOT also search the asset library or call \`find_illustration\`. Templates and library assets are separate paths — never send both. If the user is looking for a template, give them the template link. If they're looking for a graphic to put INTO a template, search the library. If unclear, ask: "Are you looking to create a banner using our template, or do you need a specific graphic or illustration to include in something you're building?"*
+
 *Routing logic:*
 - If requester asks for Figma Buzz access generally, or asks for "the Figma Buzz link" → list ALL available Figma Buzz template categories with their links so they can pick the right one. Always show the full list, not just one.
 - If requester clearly needs a specific template type (e.g., "webinar banner") → direct them to that specific template project link.
@@ -769,7 +899,7 @@ Typical outputs: social posts, paid ads, meta images for hibob.com, website bann
 
 ### Decks and Presentations
 Google Slides for internal or external use.
-- Internal, single-use → use the official HiBob slide template (self-serve). Tell them to use the template, no form needed.
+- Internal, single-use → use the official HiBob Google Slides template (self-serve). Share the direct template link. This is NOT a Figma Buzz template — do NOT share Figma Buzz links, the How-To Video, or the Buzz Access Request for slide templates. Just share the Google Slides template link directly.
 - Internal, major event with 100+ attendees → eligible for light visual polish from Brand.
 - External-facing or revenue-influencing → General Creative Services form.
 - Single slide graphic → route as Graphics/Icons.
@@ -801,9 +931,17 @@ If ineligible → politely decline and explain specifically why (e.g., "Internal
 ### Video & Animation Initiatives
 Major concept work: product launch animations, large-scale testimonials, brand partnership videos, new video formats.
 
-*CRITICAL: Do NOT route to a form. Do NOT show a submit button.*
-Requester MUST contact Brand Services leadership for scoping BEFORE any submission.
-Tell the user directly: "This type of work requires a scoping conversation with Brand leadership before we can kick things off."
+*CRITICAL: Do NOT route to a form. Do NOT show a submit button. NEVER route to \`general_creative_services\` or \`strategic_scoping\` for animation/concept work.*
+
+But before telling them it needs leadership scoping, you MUST STILL ask the qualifying questions:
+1. Is this external-facing or internal?
+2. What's the business objective? (revenue, launch, executive visibility?)
+3. What's the timeframe?
+
+If it's internal + not tied to a major event → decline (not eligible for Brand support).
+If it's external or tied to a major initiative → THEN tell them: "This type of work requires a scoping conversation with Brand leadership before we can kick things off." and share the booking link.
+
+Do NOT skip straight to "contact leadership" without understanding the scope first. A 3-minute animation for an internal wiki is NOT the same as a product launch video.
 
 ### Video — Qualifying Questions (MANDATORY)
 ANY video request — regardless of how clear it seems — MUST go through qualification before routing. When someone mentions a video, you MUST use route \`needs_clarification\` in the tool call until ALL qualifying questions are answered. Do NOT route to \`general_creative_services\` or any other form route until validation is complete.
@@ -1597,6 +1735,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const adminBypass = isAdmin(userId);
 
   const toolHasForm = toolCall && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification"
+    && !(assetType === "video_concept_or_animation") // NEVER show button for animation concepts
     && (adminBypass || !(isVideoRequest && !session.videoValidated))
     && !isLowConfidence
     && !isRejection;
@@ -1667,10 +1806,11 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   }
 
   // ── Deliver assets if the model searched for them ──
-  // Skip asset delivery for brand knowledge questions (colors, fonts, etc.)
+  // Skip asset delivery for brand knowledge questions AND template/buzz routes (never both)
   const isBrandQuestion = toolCall?.route === "brand_question";
+  const isTemplateRoute = ["figma_buzz_template", "figma_buzz_access_request", "figma_buzz_template_request", "self_serve"].includes(toolCall?.route);
   const hasValidSearch = illustrationSearch && illustrationSearch.search_tags && illustrationSearch.search_tags.filter(t => t.trim()).length > 0;
-  if (hasValidSearch && !isBrandQuestion && client) {
+  if (hasValidSearch && !isBrandQuestion && !isTemplateRoute && client) {
     const matches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null);
     if (matches.length > 0) {
       // Show fetching indicator
@@ -1798,9 +1938,18 @@ app.action("open_brief_modal", async ({ body, ack, client }) => {
   const lockedAssetType = llmAssetType ? (LLM_TO_FORM_ASSET_TYPE[llmAssetType] || null) : null;
 
   const step1Blocks = forms.buildStep1Blocks(prefillName, lockedAssetType);
-  // Inject TEAM_OPTIONS into the team block
+  // Inject TEAM_OPTIONS into the team block, with user's saved team pre-selected
   const teamBlock = step1Blocks.find((b) => b.block_id === "team_block");
-  if (teamBlock) teamBlock.element.options = TEAM_OPTIONS;
+  if (teamBlock) {
+    teamBlock.element.options = TEAM_OPTIONS;
+    const savedTeam = getUserTeam(body.user.id);
+    if (savedTeam) {
+      const matchedOption = TEAM_OPTIONS.find(t => t.text.text === savedTeam);
+      if (matchedOption) {
+        teamBlock.element.initial_option = matchedOption;
+      }
+    }
+  }
 
   await client.views.open({
     trigger_id: body.trigger_id,
@@ -2609,6 +2758,20 @@ const DEBUG_COMMANDS = {
     ];
     return lines.join("\n");
   },
+  "version": async () => {
+    if (!changelog.length) return "No version history available.";
+    const lines = [`:rocket: *BrandBot Version History*`, ``];
+    // Show last 10 entries
+    const recent = changelog.slice(-10).reverse();
+    for (const entry of recent) {
+      lines.push(`*v${entry.version}* — ${entry.date}`);
+      for (const change of entry.changes) {
+        lines.push(`  • ${change}`);
+      }
+      lines.push(``);
+    }
+    return lines.join("\n");
+  },
 };
 
 // ────────────────────────────────────────────
@@ -2916,8 +3079,6 @@ const ADMIN_COMMANDS = {
       `• \`what's due today\``,
       `• \`what's due this week\``,
       `• \`show all tasks\``,
-      `• \`my tasks\` — tasks assigned to you`,
-      `• \`my requests\` — status of requests you've submitted`,
       `• \`team tasks [team name]\` — tasks for a specific team due this week`,
       ``,
       `*Analytics:*`,
@@ -2942,14 +3103,22 @@ const ADMIN_COMMANDS = {
       ``,
       `*Catalog:*`,
       `• \`debug catalog\` — asset catalog stats`,
-      `• \`rescan assets\` — scan Drive for new assets`,
+      `• \`rescan assets\` — scan for new assets only`,
+      `• \`full rescan\` — delete catalog and rebuild from scratch`,
+      ``,
+      `*Admin Shortcuts:*`,
+      `• \`intake\` — open the creative brief form directly`,
       ``,
       `*Debug:*`,
       `• \`debug session\` / \`debug permissions\` / \`debug agencies\` / \`debug config\` / \`debug reset\``,
+      `• \`version\` — show changelog and version history`,
       ``,
-      `*User commands (available to everyone):*`,
-      `• \`my tasks\` — see tasks assigned to you`,
-      `• \`my requests\` / \`request status\` — check status of your submitted requests`,
+      `*Commands for everyone:*`,
+      `• \`my tasks\` — tasks assigned to you`,
+      `• \`my requests\` / \`request status\` — check status of your submissions`,
+      `• \`my analytics\` — your personal 90-day activity`,
+      `• \`set team [name]\` — set your team (e.g. \`set team Performance Marketing\`)`,
+      `• \`my team\` — check your current team`,
     ].join("\n");
   },
 
@@ -2993,6 +3162,56 @@ const ADMIN_COMMANDS = {
           const total = totalMatch ? totalMatch[1] : assetCatalog.length;
           const newCount = newMatch ? newMatch[1] : "?";
           resolve(`:white_check_mark: Asset scan complete. ${newCount} new assets found. Catalog now has ${total} total assets.`);
+        }
+      });
+    });
+  },
+
+  "full rescan": async (userId, text, client) => {
+    const { execFile } = require("child_process");
+    const scanScript = path.resolve(__dirname, "scan-assets.js");
+    const keyFile = path.resolve(__dirname, "intense-climber-490121-s1-932e831cd444.json");
+    const driveFolderId = "17zbQQudoe_lFv-c5xdMELEUwt6CB0uCS";
+    const assetsFile = path.resolve(__dirname, "assets.json");
+
+    if (!fs.existsSync(scanScript)) return "scan-assets.js not found.";
+
+    // Delete existing catalog
+    try {
+      if (fs.existsSync(assetsFile)) fs.unlinkSync(assetsFile);
+      assetCatalog = [];
+      console.log("[CATALOG] Deleted assets.json for full rescan");
+    } catch (e) {
+      return `:x: Couldn't delete assets.json: ${e.message}`;
+    }
+
+    if (ANALYTICS_CHANNEL_ID && client) {
+      try { await client.chat.postMessage({ channel: ANALYTICS_CHANNEL_ID, text: `:rotating_light: *Full asset re-scan started* by <@${userId}> — catalog deleted, rebuilding from scratch. This may take a while.` }); } catch {}
+    }
+
+    return new Promise((resolve) => {
+      const args = [scanScript, driveFolderId];
+      if (fs.existsSync(keyFile)) args.push(`--key=${keyFile}`);
+
+      execFile("node", args, { timeout: 600000 }, (err, stdout, stderr) => {
+        try {
+          if (fs.existsSync(assetsFile)) {
+            assetCatalog = JSON.parse(fs.readFileSync(assetsFile, "utf8"));
+            console.log(`[CATALOG] Full rescan complete: ${assetCatalog.length} assets`);
+          }
+        } catch (e) {
+          console.error("[CATALOG] Reload failed:", e.message);
+        }
+
+        if (err) {
+          console.error("[CATALOG] Full scan failed:", err.message);
+          resolve(`:x: Full scan failed: ${err.message}\n\`\`\`${(stderr || "").slice(0, 500)}\`\`\``);
+        } else {
+          const totalMatch = stdout.match(/Total: (\d+) assets/);
+          const analyzedMatch = stdout.match(/Analyzed: (\d+)/);
+          const total = totalMatch ? totalMatch[1] : assetCatalog.length;
+          const analyzed = analyzedMatch ? analyzedMatch[1] : "?";
+          resolve(`:white_check_mark: Full rescan complete. ${analyzed} assets analyzed with AI vision. Catalog rebuilt with ${total} total assets.`);
         }
       });
     });
@@ -3230,6 +3449,13 @@ app.message(async ({ message, say, client }) => {
       return;
     }
 
+    // "version" — show changelog (admin only)
+    if (textLower === "version" && isAdmin(userId)) {
+      const result = await DEBUG_COMMANDS["version"]();
+      await say(result);
+      return;
+    }
+
     // Admin query commands
     if (isAdmin(userId)) {
       const adminKey = Object.keys(ADMIN_COMMANDS).find((k) => textLower === k || textLower.startsWith(k));
@@ -3264,6 +3490,93 @@ app.message(async ({ message, say, client }) => {
       return;
     }
 
+    // "set team [name]" — available to ALL users
+    if (textLower.startsWith("set team ")) {
+      const teamName = text.replace(/^set team\s*/i, "").trim();
+      if (!teamName) { await say("Usage: `set team Performance Marketing`"); return; }
+      // Validate against known teams
+      const validTeams = TEAM_OPTIONS.map(t => t.text.text);
+      const matched = validTeams.find(t => t.toLowerCase() === teamName.toLowerCase());
+      if (matched) {
+        setUserTeam(userId, matched);
+        await say(`:white_check_mark: Your team has been set to *${matched}*. This will be used for your personal analytics and task queries.`);
+      } else {
+        setUserTeam(userId, teamName);
+        await say(`:white_check_mark: Your team has been set to *${teamName}*. Note: this doesn't match a standard team name. Standard teams: ${validTeams.join(", ")}`);
+      }
+      return;
+    }
+
+    // "my team" — show current team
+    if (textLower === "my team") {
+      const team = getUserTeam(userId);
+      await say(team ? `Your team is set to *${team}*. Use \`set team [name]\` to change it.` : `You haven't set a team yet. Use \`set team Performance Marketing\` (or any team name) to set it.`);
+      return;
+    }
+
+    // "my analytics" — personal analytics for ANY user
+    if (textLower === "my analytics") {
+      const cutoff = new Date(Date.now() - 90 * 86400000).toISOString();
+      const myEvents = analyticsData.events.filter(e => e.userId === userId && e.timestamp >= cutoff);
+      if (!myEvents.length) { await say("No activity found for you in the last 90 days."); return; }
+
+      const byType = {};
+      myEvents.forEach(e => { byType[e.type] = (byType[e.type] || 0) + 1; });
+      const team = getUserTeam(userId);
+
+      const lines = [`:bar_chart: *Your analytics — Last 90 days*`];
+      if (team) lines.push(`Team: *${team}*`);
+      lines.push(`Total events: ${myEvents.length}`, ``);
+      lines.push(`*By type:*`);
+      Object.entries(byType).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+        lines.push(`• ${k.replace(/_/g, " ")}: ${v}`);
+      });
+
+      const briefs = myEvents.filter(e => e.type === "brief_submitted");
+      if (briefs.length) {
+        const byAsset = {};
+        briefs.forEach(e => { byAsset[e.assetType || "unknown"] = (byAsset[e.assetType || "unknown"] || 0) + 1; });
+        lines.push(``, `*Your requests by asset type:*`);
+        Object.entries(byAsset).sort((a, b) => b[1] - a[1]).forEach(([type, count]) => {
+          const label = forms.ASSET_TYPE_LABELS[type] || type.replace(/_/g, " ");
+          lines.push(`• ${label}: ${count}`);
+        });
+      }
+
+      await say(lines.join("\n"));
+      return;
+    }
+
+    // "intake" — admin shortcut to open creative brief directly
+    if (textLower === "intake" && isAdmin(userId)) {
+      const requestId = `req_${userId}_${Date.now()}`;
+      pendingRequests[requestId] = {
+        userId,
+        toolCall: {},
+        conversationSummary: "Admin direct intake",
+        channel: message.channel,
+        formType: "brief",
+      };
+      await say({
+        text: "Opening the creative brief for you.",
+        blocks: [
+          { type: "section", text: { type: "mrkdwn", text: "Here's your intake form — fill it out and it'll go straight to Asana." } },
+          { type: "divider" },
+          {
+            type: "actions",
+            elements: [{
+              type: "button",
+              text: { type: "plain_text", text: "Submit Creative Brief" },
+              style: "primary",
+              action_id: "open_brief_modal",
+              value: requestId,
+            }],
+          },
+        ],
+      });
+      return;
+    }
+
     // If we're in #brandbot-ops and it's not a recognized command, ignore
     if (isOpsChannel && !isIM) return;
 
@@ -3271,6 +3584,30 @@ app.message(async ({ message, say, client }) => {
     const tier = getUserTier(userId);
     if (tier === "none") {
       await say("Hi! Brand intake is currently available to approved teams. If you need access, reach out to Brand Services.");
+      return;
+    }
+
+    // Onboarding check — if user hasn't set their team, prompt them (admins skip)
+    if (!isOnboarded(userId) && !isAdmin(userId)) {
+      await say({
+        text: "Welcome to BrandBot! Let's get you set up.",
+        blocks: [
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: `:wave: *Welcome to BrandBot!*\n\nI'm the Brand Services intake advisor for HiBob. Before we get started, I need to know which team you're on.\n\nHit the button below to set up your profile — it takes 5 seconds.` },
+          },
+          { type: "divider" },
+          {
+            type: "actions",
+            elements: [{
+              type: "button",
+              text: { type: "plain_text", text: "Get Started" },
+              style: "primary",
+              action_id: "start_onboarding",
+            }],
+          },
+        ],
+      });
       return;
     }
 
