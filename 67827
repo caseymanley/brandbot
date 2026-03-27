@@ -502,6 +502,102 @@ app.action("start_onboarding", async ({ body, ack, client }) => {
   await showOnboarding(body.user.id, body.trigger_id, client);
 });
 
+app.action("confirm_full_rescan", async ({ body, ack, client }) => {
+  await ack();
+  const userId = body.user.id;
+  const channelId = body.channel?.id || body.user.id;
+
+  const { execFile } = require("child_process");
+  const scanScript = path.resolve(__dirname, "scan-assets.js");
+  const keyFile = path.resolve(__dirname, "intense-climber-490121-s1-932e831cd444.json");
+  const driveFolderId = "17zbQQudoe_lFv-c5xdMELEUwt6CB0uCS";
+  const assetsFile = path.resolve(__dirname, "assets.json");
+
+  if (!fs.existsSync(scanScript)) {
+    await client.chat.postMessage({ channel: channelId, text: "scan-assets.js not found." });
+    return;
+  }
+
+  // Delete existing catalog
+  try {
+    if (fs.existsSync(assetsFile)) fs.unlinkSync(assetsFile);
+    assetCatalog = [];
+  } catch (e) {
+    await client.chat.postMessage({ channel: channelId, text: `:x: Couldn't delete assets.json: ${e.message}` });
+    return;
+  }
+
+  // Post progress start
+  const progressMsg = await client.chat.postMessage({
+    channel: channelId,
+    text: `:hourglass_flowing_sand: *Full rescan in progress...*\n\n:wastebasket: Catalog deleted\n:mag: Scanning Drive folder...\n\n_This may take several minutes. I'll update you as it progresses._`,
+  });
+
+  if (ANALYTICS_CHANNEL_ID) {
+    try { await client.chat.postMessage({ channel: ANALYTICS_CHANNEL_ID, text: `:rotating_light: *Full asset re-scan started* by <@${userId}> — catalog deleted, rebuilding from scratch.` }); } catch {}
+  }
+
+  const args = [scanScript, driveFolderId];
+  if (fs.existsSync(keyFile)) args.push(`--key=${keyFile}`);
+
+  const child = execFile("node", args, { timeout: 600000 }, async (err, stdout, stderr) => {
+    // Reload catalog
+    try {
+      if (fs.existsSync(assetsFile)) {
+        assetCatalog = JSON.parse(fs.readFileSync(assetsFile, "utf8"));
+      }
+    } catch (e) {
+      console.error("[CATALOG] Reload failed:", e.message);
+    }
+
+    if (err) {
+      console.error("[CATALOG] Full scan failed:", err.message);
+      await client.chat.update({
+        channel: channelId, ts: progressMsg.ts,
+        text: `:x: *Full rescan failed*\n\n${err.message}\n\`\`\`${(stderr || "").slice(0, 500)}\`\`\``,
+      });
+    } else {
+      const totalMatch = stdout.match(/Total: (\d+) assets/);
+      const analyzedMatch = stdout.match(/Analyzed: (\d+)/);
+      const skippedMatch = stdout.match(/Skipped: (\d+)/);
+      const total = totalMatch ? totalMatch[1] : assetCatalog.length;
+      const analyzed = analyzedMatch ? analyzedMatch[1] : "?";
+      const skipped = skippedMatch ? skippedMatch[1] : "0";
+
+      await client.chat.update({
+        channel: channelId, ts: progressMsg.ts,
+        text: `:white_check_mark: *Full rescan complete!*\n\n:brain: ${analyzed} assets analyzed with AI vision\n:next_track_button: ${skipped} skipped (unsupported format)\n:file_cabinet: Catalog rebuilt with *${total} total assets*`,
+      });
+
+      if (ANALYTICS_CHANNEL_ID) {
+        try { await client.chat.postMessage({ channel: ANALYTICS_CHANNEL_ID, text: `:white_check_mark: *Full rescan complete* — ${total} assets in catalog (${analyzed} analyzed)` }); } catch {}
+      }
+    }
+  });
+
+  // Progress updates via stdout monitoring
+  let lastUpdate = Date.now();
+  let scannedCount = 0;
+  if (child.stdout) {
+    child.stdout.on("data", async (data) => {
+      const lines = data.toString().split("\n");
+      for (const line of lines) {
+        if (line.includes("✅") || line.includes("⏭")) scannedCount++;
+      }
+      // Update progress every 15 seconds
+      if (Date.now() - lastUpdate > 15000 && scannedCount > 0) {
+        lastUpdate = Date.now();
+        try {
+          await client.chat.update({
+            channel: channelId, ts: progressMsg.ts,
+            text: `:hourglass_flowing_sand: *Full rescan in progress...*\n\n:brain: ${scannedCount} assets processed so far...\n\n_Still working. I'll update when it's done._`,
+          });
+        } catch {}
+      }
+    });
+  }
+});
+
 app.view("onboarding_submit", async ({ ack, view, body, client }) => {
   const userId = body.user.id;
   const vals = view.state.values;
@@ -695,19 +791,35 @@ Three logo configurations: the full "HiBob" wordmark, the "Hi" element inside th
 The *HiBubble* is a hand-drawn, deliberately imperfect speech bubble enclosing "Hi" — representing playful spirit and inclusive communication.
 Always maintain clear space around the logo. Never alter the HiBubble's hand-drawn character or change capitalization.
 
-*When someone asks for the logo file:* Before searching, ask what they need it for — this determines which version to provide:
-• *Light background (most common)* → search with tags ["logo", "hibob", "light"] — delivers HiBob_logo_for_light_BG.png
-• *Dark background / inverted* → search with tags ["logo", "hibob", "dark"] — delivers HiBob_logo_for_dark_BG.png
-• *White logo (transparent/overlay)* → search with tags ["logo", "hibob", "white"] — delivers HiBob_logo_white.png
-• *Print / CMYK* → do NOT search the library. Direct them to download from the brand portal: <https://brand.hibob.com/s/Download-Assets-dGjDKA?v=0|Download Logo Assets> and note they need the CMYK/vector version for print.
-• *Favicon / app icon / small format* → search with tags ["logo", "hi", "bubble", "icon"]
-• *Just the "Bob" name* → search with tags ["logo", "bob"]
+*When someone asks for the logo file:* Before searching, ask TWO questions:
 
-For ALL digital uses (slides, web, email, social), serve the PNG versions. Never serve CMYK or vector files for digital — those are for print only.
+1. *"What will you be using it for?"* — This determines the shape:
+   - Slide, document, web page, email → use *wordmark* (full HiBob text, transparent background)
+   - Social media profile picture or avatar → use *round* or *square* (colored background)
+   - App icon, favicon, small format → use *square* (colored background)
+   - Product/platform context (Bob the product, not HiBob the company) → use *bob_platform*
+   - Just the speech bubble mark → use *hibubble*
+   - ERG logo (Bobbility, Black@Bob, HiPride) → use the specific ERG variant
+   - Print material (brochures, business cards, signage) → direct them to <https://brand.hibob.com/s/Download-Assets-dGjDKA?v=0|Download Logo Assets> for CMYK/vector files. Do NOT search the library for print logos.
 
-Ask: "What will you be using the logo for — a slide, web page, email, or print? And will it be on a light or dark background? That'll help me send the right version."
+2. *"Will it be on a light or dark background?"* — This determines the variant:
+   - Light/white background → use *light*
+   - Dark/black background → use *dark*
+   - Cherry/red brand background → use *cherry*
+   - Needs to be white for overlay on images/video → use *white*
 
-Always set category to "logo" when searching. ALSO share the download and usage links alongside the files.
+Then call \`find_illustration\` with category "logo" and include BOTH the shape and background as the FIRST TWO search tags, followed by "logo" and "hibob". Examples:
+- Slide on light background → search_tags: ["wordmark", "light", "logo", "hibob"]
+- Social profile on cherry → search_tags: ["round", "cherry", "logo", "hibob"]
+- Small icon for app → search_tags: ["square", "black", "logo", "hibob"]
+- Bob product logo → search_tags: ["bob_platform", "black", "logo", "bob"]
+- HiBubble only → search_tags: ["hibubble", "color", "logo", "hibob"]
+- ERG Bobbility → search_tags: ["erg_bobbility", "color", "logo", "hibob"]
+
+The first tag MUST be one of: wordmark, rectangle, square, round, hibubble, bob_platform, erg_bobbility, erg_blackatbob, erg_hipride.
+The second tag MUST be one of: light, dark, white, cherry, black, color.
+
+Always share the logo usage guidelines link alongside the files: <https://brand.hibob.com/s/HiBob-logo-oKDjDr?v=0|Logo Usage Guidelines>
 
 Direct links to share:
 • Logo downloads (SVG, PNG, vector): <https://brand.hibob.com/s/Download-Assets-dGjDKA?v=0|Download Logo Assets>
@@ -1332,6 +1444,81 @@ function searchAssets(tags, category = null) {
     .slice(0, 3);
 }
 
+// ────────────────────────────────────────────
+// Logo Router — deterministic logo delivery
+// ────────────────────────────────────────────
+// Bypasses fuzzy search entirely. Matches logos by file name patterns.
+function findLogo(shape, background, format = "png") {
+  if (!assetCatalog.length) return [];
+
+  const fmt = (format || "png").toLowerCase();
+
+  // Build filename patterns for each shape+background combo
+  const patterns = {
+    wordmark: {
+      light: ["logo_for_light_BG", "Logo Digital Vector PNG Light"],
+      dark: ["logo_for_dark_BG", "Logo Digital Vector PNG Dark"],
+      white: ["logo_white", "Logo Digital Vector PNG Inverse", "NEW Logo White"],
+    },
+    rectangle: {
+      white: ["Rectangle_White Background", "logo_with White Background"],
+      cherry: ["Rectangle_Cherry Background", "logo_with Cherry Background"],
+      black: ["Rectangle_Black Background", "logo_with Black Background"],
+    },
+    square: {
+      white: ["Square_White Background", "Square HiBob Logo Square_White"],
+      cherry: ["Square_Cherry Background", "Square HiBob Logo Square_Cherry"],
+      black: ["Square_Black Background", "Square HiBob Logo Square_Black"],
+    },
+    round: {
+      white: ["Round_HiBob Logo White", "Round_HiBob_logo_White"],
+      cherry: ["Round_HiBob Logo Cherry", "Round_HiBob_logo_Cherry"],
+      black: ["Round_HiBob Logo Black", "Round_HiBob_logo_Black"],
+    },
+    hibubble: {
+      color: ["HiBuble", "HiBubble"],
+      white: ["HiBubble_White on Transparent"],
+    },
+    bob_platform: {
+      black: ["Transparent_Bob-Logo_Black", "Bob Platform Black"],
+      white: ["Transparent_Bob-Logo_White"],
+      cherry: ["Transparent_Bob-Logo_Cherry", "Bob Platform Cherry"],
+    },
+    erg_bobbility: {
+      color: ["HiBob_ERG_Bobbility", "HiBob Bobbility Logo"],
+      white: ["HiBob_ERG_Bobbility_white"],
+    },
+    erg_blackatbob: {
+      color: ["Black@Bob HiBob's Black ERG.", "HiBob Black@Bob Logo"],
+      white: ["Black@Bob HiBob's Black ERG_white"],
+    },
+    erg_hipride: {
+      color: ["HiBob_ERG_HiPride.", "HiBob Pride Logo"],
+      white: ["HiBob_ERG_HiPride_White"],
+    },
+  };
+
+  const shapePatterns = patterns[shape];
+  if (!shapePatterns) return [];
+  const bgPatterns = shapePatterns[background] || shapePatterns[Object.keys(shapePatterns)[0]];
+  if (!bgPatterns) return [];
+
+  // Find matching assets
+  const matches = assetCatalog.filter(a => {
+    if (fmt !== "any" && a.format !== fmt) return false;
+    const fileName = a.file || a.name || "";
+    return bgPatterns.some(p => fileName.includes(p));
+  });
+
+  // Deduplicate by name
+  const seen = new Set();
+  return matches.filter(a => {
+    if (seen.has(a.name)) return false;
+    seen.add(a.name);
+    return true;
+  }).slice(0, 3);
+}
+
 // Download a file from Google Drive by file_id
 async function downloadDriveFile(fileId, fileName) {
   try {
@@ -1414,6 +1601,21 @@ async function getResponse(session) {
   const model = process.env.OPENAI_MODEL || "gpt-4o";
   const systemPrompt = buildSystemPrompt();
 
+  // Helper: resolve matches for illustration or logo searches
+  function resolveMatches(search) {
+    if (!search) return [];
+    if (search.category === "logo") {
+      const tags = (search.search_tags || []).map(t => t.toLowerCase());
+      const VALID_SHAPES = ["wordmark", "rectangle", "square", "round", "hibubble", "bob_platform", "erg_bobbility", "erg_blackatbob", "erg_hipride"];
+      const VALID_BGS = ["light", "dark", "white", "cherry", "black", "color"];
+      const shape = tags.find(t => VALID_SHAPES.includes(t)) || "wordmark";
+      const bg = tags.find(t => VALID_BGS.includes(t)) || "light";
+      const results = findLogo(shape, bg);
+      return results.length ? results : searchAssets(search.search_tags, "logo");
+    }
+    return searchAssets(search.search_tags, search.category || null);
+  }
+
   const cleanHistory = sanitizeHistory(session.messages);
 
   // Include illustration tool only if the index is loaded
@@ -1463,7 +1665,7 @@ async function getResponse(session) {
       if (tc.function.name === "route_request" && toolCall) {
         resultContent = { status: "logged", route: toolCall.route };
       } else if (tc.function.name === "find_illustration" && illustrationSearch) {
-        const matches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null);
+        const matches = resolveMatches(illustrationSearch);
         resultContent = {
           status: matches.length > 0 ? "found" : "not_found",
           count: matches.length,
@@ -1488,7 +1690,7 @@ async function getResponse(session) {
       if (tc.function.name === "route_request" && toolCall) {
         content = { status: "logged", route: toolCall.route };
       } else if (tc.function.name === "find_illustration" && illustrationSearch) {
-        const matches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null);
+        const matches = resolveMatches(illustrationSearch);
         content = {
           status: matches.length > 0 ? "found" : "not_found",
           count: matches.length,
@@ -1811,7 +2013,25 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const isTemplateRoute = ["figma_buzz_template", "figma_buzz_access_request", "figma_buzz_template_request", "self_serve"].includes(toolCall?.route);
   const hasValidSearch = illustrationSearch && illustrationSearch.search_tags && illustrationSearch.search_tags.filter(t => t.trim()).length > 0;
   if (hasValidSearch && !isBrandQuestion && !isTemplateRoute && client) {
-    const matches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null);
+    // Logo requests use the deterministic router instead of fuzzy search
+    const isLogoRequest = illustrationSearch.category === "logo";
+    let matches;
+    if (isLogoRequest) {
+      const tags = illustrationSearch.search_tags.map(t => t.toLowerCase());
+      const VALID_SHAPES = ["wordmark", "rectangle", "square", "round", "hibubble", "bob_platform", "erg_bobbility", "erg_blackatbob", "erg_hipride"];
+      const VALID_BGS = ["light", "dark", "white", "cherry", "black", "color"];
+      const shape = tags.find(t => VALID_SHAPES.includes(t)) || "wordmark";
+      const background = tags.find(t => VALID_BGS.includes(t)) || "light";
+      matches = findLogo(shape, background);
+      console.log(`[LOGO] Deterministic lookup: shape=${shape}, bg=${background} → ${matches.length} matches`);
+      if (!matches.length) {
+        // Fallback to fuzzy search if deterministic lookup fails
+        matches = searchAssets(illustrationSearch.search_tags, "logo");
+        console.log(`[LOGO] Fallback to fuzzy search → ${matches.length} matches`);
+      }
+    } else {
+      matches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null);
+    }
     if (matches.length > 0) {
       // Show fetching indicator
       let fetchingTs = null;
@@ -3168,53 +3388,8 @@ const ADMIN_COMMANDS = {
   },
 
   "full rescan": async (userId, text, client) => {
-    const { execFile } = require("child_process");
-    const scanScript = path.resolve(__dirname, "scan-assets.js");
-    const keyFile = path.resolve(__dirname, "intense-climber-490121-s1-932e831cd444.json");
-    const driveFolderId = "17zbQQudoe_lFv-c5xdMELEUwt6CB0uCS";
-    const assetsFile = path.resolve(__dirname, "assets.json");
-
-    if (!fs.existsSync(scanScript)) return "scan-assets.js not found.";
-
-    // Delete existing catalog
-    try {
-      if (fs.existsSync(assetsFile)) fs.unlinkSync(assetsFile);
-      assetCatalog = [];
-      console.log("[CATALOG] Deleted assets.json for full rescan");
-    } catch (e) {
-      return `:x: Couldn't delete assets.json: ${e.message}`;
-    }
-
-    if (ANALYTICS_CHANNEL_ID && client) {
-      try { await client.chat.postMessage({ channel: ANALYTICS_CHANNEL_ID, text: `:rotating_light: *Full asset re-scan started* by <@${userId}> — catalog deleted, rebuilding from scratch. This may take a while.` }); } catch {}
-    }
-
-    return new Promise((resolve) => {
-      const args = [scanScript, driveFolderId];
-      if (fs.existsSync(keyFile)) args.push(`--key=${keyFile}`);
-
-      execFile("node", args, { timeout: 600000 }, (err, stdout, stderr) => {
-        try {
-          if (fs.existsSync(assetsFile)) {
-            assetCatalog = JSON.parse(fs.readFileSync(assetsFile, "utf8"));
-            console.log(`[CATALOG] Full rescan complete: ${assetCatalog.length} assets`);
-          }
-        } catch (e) {
-          console.error("[CATALOG] Reload failed:", e.message);
-        }
-
-        if (err) {
-          console.error("[CATALOG] Full scan failed:", err.message);
-          resolve(`:x: Full scan failed: ${err.message}\n\`\`\`${(stderr || "").slice(0, 500)}\`\`\``);
-        } else {
-          const totalMatch = stdout.match(/Total: (\d+) assets/);
-          const analyzedMatch = stdout.match(/Analyzed: (\d+)/);
-          const total = totalMatch ? totalMatch[1] : assetCatalog.length;
-          const analyzed = analyzedMatch ? analyzedMatch[1] : "?";
-          resolve(`:white_check_mark: Full rescan complete. ${analyzed} assets analyzed with AI vision. Catalog rebuilt with ${total} total assets.`);
-        }
-      });
-    });
+    // Return a special marker — the message handler will show the confirmation
+    return "__FULL_RESCAN_CONFIRM__";
   },
 
   // ── My Tasks (works for any user, not just admins — added to admin commands for dispatch) ──
@@ -3468,7 +3643,35 @@ app.message(async ({ message, say, client }) => {
           }
         }
         const result = await ADMIN_COMMANDS[adminKey](userId, text, client);
-        await say(result);
+        if (result === "__FULL_RESCAN_CONFIRM__") {
+          await say({
+            text: "Full rescan will delete the entire asset catalog and rebuild it from scratch. This takes several minutes.",
+            blocks: [
+              {
+                type: "section",
+                text: { type: "mrkdwn", text: `:warning: *Full rescan will delete the entire asset catalog* and rebuild it from scratch using AI vision analysis.\n\nThis takes several minutes and the library will be unavailable during the scan. Are you sure?` },
+              },
+              { type: "divider" },
+              {
+                type: "actions",
+                elements: [{
+                  type: "button",
+                  text: { type: "plain_text", text: "Delete & Rebuild Catalog" },
+                  style: "danger",
+                  action_id: "confirm_full_rescan",
+                  confirm: {
+                    title: { type: "plain_text", text: "Are you absolutely sure?" },
+                    text: { type: "mrkdwn", text: "This will delete all asset data and re-analyze every file in the Drive folder." },
+                    confirm: { type: "plain_text", text: "Yes, delete and rebuild" },
+                    deny: { type: "plain_text", text: "Cancel" },
+                  },
+                }],
+              },
+            ],
+          });
+        } else {
+          await say(result);
+        }
         return;
       }
     }
