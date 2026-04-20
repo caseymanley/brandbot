@@ -2108,10 +2108,11 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       // Send all files in a single message
       if (fileUploads.length > 0) {
         try {
-          const commentLines = deliveredAssets.map(m => `*${m.name}* — <${m.drive_link}|Open in Drive>`);
+          const commentLines = deliveredAssets.map(m => `*${m.name}*`);
+          const comment = deliveredAssets.length === 1 ? commentLines[0] : commentLines.join("\n");
           await client.files.uploadV2({
             channel_id: channelId,
-            initial_comment: commentLines.join("\n"),
+            initial_comment: comment,
             file_uploads: fileUploads,
           });
           for (const match of deliveredAssets) {
@@ -2122,13 +2123,13 @@ async function handleIntake({ userId, text, say, channelId, client }) {
         } catch (err) {
           console.error(`[ASSET] Batch upload failed:`, err.message);
           const allLinks = deliveredAssets.map(m => `• <${m.drive_link}|${m.name}>`);
-          await client.chat.postMessage({ channel: channelId, text: `Couldn't send files directly. Here are the Drive links:\n${allLinks.join("\n")}` });
+          await client.chat.postMessage({ channel: channelId, text: `Couldn't send files directly. Here are the Drive links:\n${allLinks.join("\n")}`, unfurl_links: false, unfurl_media: false });
         }
       }
 
       // Send fallback links for any that couldn't be downloaded
       if (fallbackLinks.length > 0) {
-        await client.chat.postMessage({ channel: channelId, text: `Some assets couldn't be downloaded directly:\n${fallbackLinks.join("\n")}` });
+        await client.chat.postMessage({ channel: channelId, text: `Some assets couldn't be downloaded directly:\n${fallbackLinks.join("\n")}`, unfurl_links: false, unfurl_media: false });
       }
 
       // Remove fetching indicator
@@ -2139,6 +2140,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       await client.chat.postMessage({
         channel: channelId,
         text: `I couldn't find a matching asset for "${illustrationSearch.search_tags.join(", ")}." You can browse the full library here:\n• <https://brand.hibob.com/s/Spot-illustrations-RmNLE5?v=0|Spot Illustrations>\n• <https://brand.hibob.com/s/Illustrative-icons-oKDnzE?v=0|Illustrative Icons>\n\nOr submit a Creative Brief if you need something custom.`,
+        unfurl_links: false, unfurl_media: false,
       });
     }
   }
@@ -2451,7 +2453,7 @@ app.view("brief_step2", async ({ ack, view, body, client }) => {
     }
 
     await ack();
-    await client.chat.postMessage({ channel: userId, text: confirmText });
+    await client.chat.postMessage({ channel: userId, text: confirmText, unfurl_links: false, unfurl_media: false });
     delete pendingRequests[step1.requestId];
     console.log(`[ASANA] Created ${step1.assetType} task ${taskGid} for user ${userId}: ${step1.name}`);
     postAnalytics(`:memo: *${assetLabel} submitted* by <@${userId}>\nRequest: *${step1.name}*\nTeam: ${step1.team?.text?.text || "N/A"}\nPriority: ${step1.priority?.text?.text || "N/A"}\n${taskUrl ? `<${taskUrl}|View in Asana>` : ""}`);
@@ -2597,7 +2599,7 @@ app.view("submit_review", async ({ ack, view, body, client }) => {
       setPendingFileUpload(userId, taskGid, taskUrl, requestName);
     }
     await ack();
-    await client.chat.postMessage({ channel: userId, text: confirmText });
+    await client.chat.postMessage({ channel: userId, text: confirmText, unfurl_links: false, unfurl_media: false });
     delete pendingRequests[requestId];
     console.log(`[ASANA] Created review task ${taskGid} for user ${userId}: ${requestName}`);
     postAnalytics(`:mag: *Creative Review submitted* by <@${userId}>\nRequest: *${requestName}*\nTeam: ${team?.text?.text || "N/A"}\n${taskUrl ? `<${taskUrl}|View in Asana>` : ""}`);
@@ -2863,7 +2865,7 @@ app.view("submit_template_request", async ({ ack, view, body, client }) => {
     }
 
     await ack();
-    await client.chat.postMessage({ channel: userId, text: confirmText });
+    await client.chat.postMessage({ channel: userId, text: confirmText, unfurl_links: false, unfurl_media: false });
     delete pendingRequests[requestId];
     console.log(`[ASANA] Created template request ${taskGid} for user ${userId}: ${requestName}`);
     postAnalytics(`:art: *Template Request submitted* by <@${userId}>\nRequest: *${requestName}*\nTeam: ${team?.text?.text || "N/A"}\n${taskUrl ? `<${taskUrl}|View in Asana>` : ""}`);
@@ -3582,7 +3584,13 @@ const ADMIN_COMMANDS = {
 // Permission management commands — available to admins in DMs (no channel scope needed)
 const CHANNEL_ONLY_COMMANDS = [];
 
-app.message(async ({ message, say, client }) => {
+app.message(async ({ message, say: _say, client }) => {
+  // Wrap say() to suppress Slack URL preview unfurls on all bot messages
+  const say = (msg) => {
+    if (typeof msg === "string") return _say({ text: msg, unfurl_links: false, unfurl_media: false });
+    return _say({ ...msg, unfurl_links: false, unfurl_media: false });
+  };
+
   try {
     const isIM = message.channel_type === "im";
     const isOpsChannel = message.channel === ANALYTICS_CHANNEL_ID;
