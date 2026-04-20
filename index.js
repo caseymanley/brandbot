@@ -3308,7 +3308,7 @@ const ADMIN_COMMANDS = {
       `• \`top requesters\` — who submits the most`,
       `• \`weekly digest\` — post the weekly digest now`,
       ``,
-      `*Users:* _(#brandbot-ops only)_`,
+      `*Users:*`,
       `• \`add admin @user\``,
       `• \`add full @user\``,
       `• \`add limited @user\``,
@@ -3531,8 +3531,8 @@ const ADMIN_COMMANDS = {
 // Slack event handlers
 // ────────────────────────────────────────────
 
-// Permission management commands that MUST be run in #brandbot-ops
-const CHANNEL_ONLY_COMMANDS = ["add admin", "add full", "add limited", "remove user", "list users"];
+// Permission management commands — available to admins in DMs (no channel scope needed)
+const CHANNEL_ONLY_COMMANDS = [];
 
 app.message(async ({ message, say, client }) => {
   try {
@@ -3635,13 +3635,6 @@ app.message(async ({ message, say, client }) => {
     if (isAdmin(userId)) {
       const adminKey = Object.keys(ADMIN_COMMANDS).find((k) => textLower === k || textLower.startsWith(k));
       if (adminKey) {
-        // Enforce channel-only restriction for permission management commands
-        if (CHANNEL_ONLY_COMMANDS.some((c) => adminKey === c || adminKey.startsWith(c))) {
-          if (!isOpsChannel) {
-            await say("Permission management commands can only be used in #brandbot-ops. Head over there and try again.");
-            return;
-          }
-        }
         const result = await ADMIN_COMMANDS[adminKey](userId, text, client);
         if (result === "__FULL_RESCAN_CONFIRM__") {
           await say({
