@@ -953,6 +953,20 @@ CRITICAL DISTINCTION — "TEMPLATE" vs "ASSET":
 
 7. If no matches are found, direct them to the brand portal libraries or suggest a Creative Brief for custom work.
 
+### COLLECTION BOUNDARIES — what goes where
+The asset library is organized into collections. Each collection is a separate pool — results ONLY come from the right collection for the request:
+
+- *Icons* — small spot graphics for slides, UI, inline usage. Category: "icon".
+- *Illustrations* — larger visuals for headers, hero images, featured graphics. Category: "illustration".
+- *HiBob Logos* — standard HiBob logo files. Category: "logo". These are the DEFAULT when someone asks for "the logo" or "HiBob logo."
+- *ERG Logos* — Employee Resource Group logos (HiPride, Bobbility, Black@Bob). Category: "logo". ONLY deliver these when the user EXPLICITLY names an ERG or says "ERG logo." Never mix ERG logos into regular logo results.
+- *Anniversary assets* — work anniversary graphics ("Officially a Bobber", milestone celebrations). ONLY deliver when the user EXPLICITLY asks for anniversary or milestone assets. These are NOT general illustrations.
+
+SELF-SERVE items — do NOT search the library for these. Instead, share the direct link:
+- Zoom backgrounds → <https://brand.hibob.com/s/owgQ9E?v=0|Zoom Backgrounds>
+- LinkedIn profile covers → <https://brand.hibob.com/s/owgQ9E?v=0|LinkedIn Profile Covers>
+- Desktop screensavers → direct to Brand Services team
+
 ### When Answering Brand Questions
 ALWAYS link to the SPECIFIC section — never just "brand.hibob.com." Use the direct links above.
 Be helpful and specific — share what you know (color values, voice characteristics, etc.) AND the link.
@@ -1353,8 +1367,18 @@ function searchAssets(tags, category = null) {
   if (!assetCatalog.length) return [];
   const searchTerms = tags.map((t) => t.toLowerCase());
 
-  // Categories to exclude when searching for illustrations or icons
-  // Banners, templates, and backgrounds are production assets, not generic illustrations
+  // ── Collection gates ──
+  // These collections are ONLY searchable when explicitly requested via matching keywords.
+  // This prevents ERG logos, anniversary banners, etc. from contaminating regular searches.
+  const ERG_TERMS = ["erg", "hipride", "bobbility", "blackatbob", "black@bob", "employee resource group"];
+  const ANNIVERSARY_TERMS = ["anniversary", "anniversaries", "bobber", "work anniversary"];
+  const SELF_SERVE_COLLECTIONS = ["linkedin_covers", "zoom_backgrounds", "screensavers", "brand_guidelines"];
+
+  const searchText = searchTerms.join(" ");
+  const hasErgIntent = ERG_TERMS.some(t => searchText.includes(t));
+  const hasAnniversaryIntent = ANNIVERSARY_TERMS.some(t => searchText.includes(t));
+
+  // Categories to exclude when no specific category is requested
   const EXCLUDED_FROM_GENERIC_SEARCH = ["banner", "template", "background"];
 
   // Keywords that indicate a production/banner asset — penalize in generic searches
@@ -1362,6 +1386,17 @@ function searchAssets(tags, category = null) {
 
   return assetCatalog
     .filter((a) => {
+      const col = a.collection || "general";
+
+      // Hard gate: self-serve collections are never delivered from the library
+      if (SELF_SERVE_COLLECTIONS.includes(col)) return false;
+
+      // Hard gate: ERG logos only when explicitly requested
+      if (col === "erg_logos" && !hasErgIntent) return false;
+
+      // Hard gate: anniversary assets only when explicitly requested
+      if (col === "anniversaries" && !hasAnniversaryIntent) return false;
+
       // If a specific category is requested, match it
       if (category) return a.category === category;
       // If no category specified, exclude production-specific categories
@@ -1415,6 +1450,13 @@ function searchAssets(tags, category = null) {
           if (uLower.includes(t)) score += 2;
         }
       }
+
+      // Boost assets whose collection matches the category being searched
+      // This rewards icons from the Icons folder over illustrations that happen to match
+      const col = item.collection || "general";
+      if (category === "icon" && col === "icons") score += 5;
+      if (category === "illustration" && col === "illustrations") score += 5;
+      if (category === "logo" && col === "hibob_logos") score += 5;
 
       // Penalize production/banner assets in generic (non-category) searches
       if (!category) {
@@ -2961,6 +3003,8 @@ const DEBUG_COMMANDS = {
     if (!assetCatalog.length) return "No assets loaded. Run `rescan assets` to scan the Drive folder.";
     const byCat = {};
     assetCatalog.forEach((a) => { byCat[a.category] = (byCat[a.category] || 0) + 1; });
+    const byCol = {};
+    assetCatalog.forEach((a) => { const c = a.collection || "general"; byCol[c] = (byCol[c] || 0) + 1; });
     const assetsFile = path.resolve(__dirname, "assets.json");
     let lastModified = "unknown";
     try {
@@ -2975,6 +3019,9 @@ const DEBUG_COMMANDS = {
       ``,
       `*By category:*`,
       ...Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, n]) => `• ${c}: ${n}`),
+      ``,
+      `*By collection:*`,
+      ...Object.entries(byCol).sort((a, b) => b[1] - a[1]).map(([c, n]) => `• ${c}: ${n}`),
     ];
     return lines.join("\n");
   },
@@ -3531,6 +3578,7 @@ const ADMIN_COMMANDS = {
 // Slack event handlers
 // ────────────────────────────────────────────
 
+// Permission management commands that MUST be run in #brandbot-ops
 // Permission management commands — available to admins in DMs (no channel scope needed)
 const CHANNEL_ONLY_COMMANDS = [];
 

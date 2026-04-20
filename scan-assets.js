@@ -85,7 +85,7 @@ Rules:
 - Return ONLY valid JSON. No markdown, no backticks.`;
 
 // ── Analyze one image ──
-async function analyzeImage(drive, fileId, fileName) {
+async function analyzeImage(drive, fileId, fileName, folderPath = []) {
   try {
     const ext = fileName.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || "png";
     if (ext === "svg" || ext === "ai" || ext === "eps" || ext === "pdf") {
@@ -99,13 +99,15 @@ async function analyzeImage(drive, fileId, fileName) {
     const mimeType = mimeMap[ext] || "image/png";
     const base64 = buffer.toString("base64");
 
+    const folderContext = folderPath.length ? `Folder: "${folderPath.join(" / ")}". ` : "";
+
     const response = await openai.chat.completions.create({
       model: visionModel,
       messages: [
         { role: "system", content: VISION_SYSTEM },
         { role: "user", content: [
           { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}`, detail: "low" } },
-          { type: "text", text: `File: "${fileName}". Analyze and return JSON.` },
+          { type: "text", text: `${folderContext}File: "${fileName}". Analyze and return JSON.` },
         ]},
       ],
       max_tokens: 500,
@@ -129,6 +131,32 @@ async function processBatches(items, fn, size) {
     if (i + size < items.length) await new Promise((r) => setTimeout(r, 500));
   }
   return results;
+}
+
+// ── Collection mapping ──
+// Maps Drive folder names to canonical collections. The collection field is the
+// primary filter in search — it determines WHAT pool of assets is searchable.
+// Category (icon, illustration, logo, etc.) is a secondary descriptor.
+const COLLECTION_RULES = [
+  { match: /^ERG Logos/i,               collection: "erg_logos",          category: "logo" },
+  { match: /^HiBob Logo/i,             collection: "hibob_logos",        category: "logo" },
+  { match: /^Icons/i,                  collection: "icons",              category: "icon" },
+  { match: /^Illustrations/i,          collection: "illustrations",      category: "illustration" },
+  { match: /^HiBob anniversaries/i,    collection: "anniversaries",      category: "illustration" },
+  { match: /^Linkedin Profile/i,       collection: "linkedin_covers",    category: "background" },
+  { match: /^Zoom background/i,        collection: "zoom_backgrounds",   category: "background" },
+  { match: /^Desktop Screensaver/i,    collection: "screensavers",       category: "background" },
+  { match: /^HiBob Brand Guidelines/i, collection: "brand_guidelines",   category: "asset" },
+];
+
+function resolveCollection(folderPath) {
+  const topFolder = (folderPath[0] || "").trim();
+  for (const rule of COLLECTION_RULES) {
+    if (rule.match.test(topFolder)) {
+      return { collection: rule.collection, category: rule.category };
+    }
+  }
+  return { collection: "general", category: null }; // null = let vision or name decide
 }
 
 // ── Name-based tags ──
@@ -177,8 +205,14 @@ async function scanFolder(drive, id, folderPath = []) {
 function buildEntry(file, vision) {
   const ext = file.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || "unknown";
   const nt = nameTags(file.name, file.folderPath);
-  const cat = categorize(file.name, file.folderPath);
+  const folderCat = categorize(file.name, file.folderPath);
   const hasVision = vision && !vision.skipped;
+
+  // Resolve collection from folder — this is authoritative
+  const { collection, category: collectionCategory } = resolveCollection(file.folderPath);
+
+  // Category priority: collection rule > folder-based categorize() > vision guess
+  const category = collectionCategory || folderCat || (hasVision ? (vision.style || "asset") : "asset");
 
   const allTags = hasVision ? [...new Set([...nt, ...(vision.keywords || []).map((k) => k.toLowerCase())])] : nt;
 
@@ -186,13 +220,14 @@ function buildEntry(file, vision) {
     name: file.name.replace(/\.[^.]+$/, ""),
     file: file.name,
     file_id: file.id,
-    category: hasVision ? (vision.style || cat) : cat,
+    collection,
+    category,
     tags: allTags,
     keywords: hasVision ? (vision.keywords || nt) : nt,
     concepts: hasVision ? (vision.concepts || []) : [],
     usage_suggestions: hasVision ? (vision.usage_suggestions || []) : [],
     description: hasVision ? (vision.description || "") : "",
-    style: hasVision ? (vision.style || cat) : cat,
+    style: hasVision ? (vision.style || category) : category,
     mood: hasVision ? (vision.mood || "") : "",
     colors: hasVision ? (vision.colors || []) : [],
     format: ext,
@@ -234,7 +269,7 @@ async function main() {
   } else {
     console.log("Phase 2: AI vision analysis...\n");
     const results = await processBatches(files, async (f) => {
-      const vision = await analyzeImage(drive, f.id, f.name);
+      const vision = await analyzeImage(drive, f.id, f.name, f.folderPath);
       if (vision.skipped) { skipped++; process.stdout.write(`  ⏭ ${f.name} (${vision.reason})\n`); }
       else { analyzed++; process.stdout.write(`  ✅ ${f.name} → ${(vision.keywords||[]).length} keywords\n`); }
       return buildEntry(f, vision);
@@ -257,6 +292,11 @@ async function main() {
   final.forEach((a) => { byCat[a.category] = (byCat[a.category] || 0) + 1; });
   console.log("\nBy category:");
   Object.entries(byCat).sort((a, b) => b[1] - a[1]).forEach(([c, n]) => console.log(`  ${c}: ${n}`));
+
+  const byCol = {};
+  final.forEach((a) => { byCol[a.collection || "general"] = (byCol[a.collection || "general"] || 0) + 1; });
+  console.log("\nBy collection:");
+  Object.entries(byCol).sort((a, b) => b[1] - a[1]).forEach(([c, n]) => console.log(`  ${c}: ${n}`));
 
   const sample = final.find((a) => a.vision_analyzed);
   if (sample) {
