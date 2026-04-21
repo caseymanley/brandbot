@@ -7,6 +7,36 @@ const forms = require("./forms");
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// ────────────────────────────────────────────
+// Persistent data directory
+// ────────────────────────────────────────────
+// DATA_DIR points to a persistent volume on Railway (survives deploys).
+// Falls back to __dirname for local development.
+// Set DATA_DIR=/data in Railway env vars and mount a volume at /data.
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+
+// Seed: if a data file doesn't exist in DATA_DIR yet, copy from the app bundle (git repo).
+// This ensures first deploy gets the initial permissions/profiles/catalog, and subsequent
+// deploys never overwrite runtime changes.
+function seedDataFile(filename) {
+  const target = path.resolve(DATA_DIR, filename);
+  const source = path.resolve(__dirname, filename);
+  if (!fs.existsSync(target) && fs.existsSync(source)) {
+    fs.copyFileSync(source, target);
+    console.log(`[DATA] Seeded ${filename} → ${DATA_DIR}`);
+  }
+}
+
+// Ensure DATA_DIR exists
+if (DATA_DIR !== __dirname && !fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  console.log(`[DATA] Created data directory: ${DATA_DIR}`);
+}
+
+// Seed all runtime data files on first boot
+["permissions.json", "user-profiles.json", "analytics.json", "assets.json", "agencies.json"].forEach(seedDataFile);
+console.log(`[DATA] Data directory: ${DATA_DIR}`);
+
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   appToken: process.env.SLACK_APP_TOKEN,
@@ -98,7 +128,7 @@ async function uploadFileToAsana(taskGid, fileBuffer, fileName) {
 let permissions = { admin: { users: [] }, full: { users: [] }, limited: { users: [] } };
 
 function loadPermissions() {
-  const p = path.resolve(__dirname, "permissions.json");
+  const p = path.resolve(DATA_DIR, "permissions.json");
   if (fs.existsSync(p)) {
     permissions = JSON.parse(fs.readFileSync(p, "utf8"));
     const total = permissions.admin.users.length + permissions.full.users.length + permissions.limited.users.length;
@@ -138,7 +168,7 @@ function isAdmin(userId) {
 let agencyWhitelist = [];
 
 function loadAgencies() {
-  const p = path.resolve(__dirname, "agencies.json");
+  const p = path.resolve(DATA_DIR, "agencies.json");
   if (fs.existsSync(p)) {
     const data = JSON.parse(fs.readFileSync(p, "utf8"));
     agencyWhitelist = data.approved_agencies || [];
@@ -350,7 +380,7 @@ function getSlaWarning(assetType, dueDate) {
 // Analytics channel + tracking
 // ────────────────────────────────────────────
 const ANALYTICS_CHANNEL_ID = process.env.ANALYTICS_CHANNEL_ID;
-const ANALYTICS_FILE = path.resolve(__dirname, "analytics.json");
+const ANALYTICS_FILE = path.resolve(DATA_DIR, "analytics.json");
 
 // In-memory analytics store, persisted to analytics.json
 let analyticsData = { events: [] };
@@ -511,7 +541,7 @@ app.action("confirm_full_rescan", async ({ body, ack, client }) => {
   const scanScript = path.resolve(__dirname, "scan-assets.js");
   const keyFile = path.resolve(__dirname, "intense-climber-490121-s1-932e831cd444.json");
   const driveFolderId = "17zbQQudoe_lFv-c5xdMELEUwt6CB0uCS";
-  const assetsFile = path.resolve(__dirname, "assets.json");
+  const assetsFile = path.resolve(DATA_DIR, "assets.json");
 
   if (!fs.existsSync(scanScript)) {
     await client.chat.postMessage({ channel: channelId, text: "scan-assets.js not found." });
@@ -537,7 +567,7 @@ app.action("confirm_full_rescan", async ({ body, ack, client }) => {
     try { await client.chat.postMessage({ channel: ANALYTICS_CHANNEL_ID, text: `:rotating_light: *Full asset re-scan started* by <@${userId}> — catalog deleted, rebuilding from scratch.` }); } catch {}
   }
 
-  const args = [scanScript, driveFolderId];
+  const args = [scanScript, driveFolderId, `--output=${assetsFile}`];
   if (fs.existsSync(keyFile)) args.push(`--key=${keyFile}`);
 
   const child = execFile("node", args, { timeout: 600000 }, async (err, stdout, stderr) => {
@@ -595,6 +625,129 @@ app.action("confirm_full_rescan", async ({ body, ack, client }) => {
         } catch {}
       }
     });
+  }
+});
+
+// ── "Show More Options" button handler for asset delivery ──
+app.action("show_more_assets", async ({ body, ack, client }) => {
+  await ack();
+  const userId = body.user.id;
+  const channelId = body.channel?.id || userId;
+
+  let params;
+  try {
+    params = JSON.parse(body.actions[0].value);
+  } catch (err) {
+    console.error("[ASSET] Failed to parse show more params:", err.message);
+    await client.chat.postMessage({ channel: channelId, text: "Something went wrong — try asking me again.", unfurl_links: false, unfurl_media: false });
+    return;
+  }
+
+  const { tags, category, context, offset } = params;
+  console.log(`[ASSET] Show More — tags: ${tags.join(",")}, category: ${category}, offset: ${offset}`);
+
+  // Remove the button message to keep things tidy
+  try {
+    await client.chat.delete({ channel: channelId, ts: body.message.ts });
+  } catch {}
+
+  // Search with offset
+  const matches = searchAssets(tags, category, 3, offset);
+
+  if (matches.length === 0) {
+    await client.chat.postMessage({
+      channel: channelId,
+      text: `No more matching assets for that search. You can browse the full library here:\n• <https://brand.hibob.com/s/Spot-illustrations-RmNLE5?v=0|Spot Illustrations>\n• <https://brand.hibob.com/s/Illustrative-icons-oKDnzE?v=0|Illustrative Icons>\n\nOr submit a Creative Brief if you need something custom.`,
+      unfurl_links: false, unfurl_media: false,
+    });
+    return;
+  }
+
+  // Fetching indicator
+  let fetchingTs = null;
+  try {
+    const fetchMsg = await client.chat.postMessage({
+      channel: channelId,
+      text: `:hourglass_flowing_sand: Fetching ${matches.length} more asset${matches.length > 1 ? "s" : ""} from the library...`,
+    });
+    fetchingTs = fetchMsg.ts;
+  } catch {}
+
+  // Download and deliver
+  const fileUploads = [];
+  const fallbackLinks = [];
+  const deliveredAssets = [];
+
+  for (const match of matches) {
+    try {
+      const buffer = await downloadDriveFile(match.file_id, match.file);
+      if (!buffer) {
+        fallbackLinks.push(`• <${match.drive_link}|${match.name}>`);
+        continue;
+      }
+      fileUploads.push({ file: buffer, filename: match.file });
+      deliveredAssets.push(match);
+    } catch (err) {
+      console.error(`[ASSET] Failed to download ${match.name}:`, err.message);
+      fallbackLinks.push(`• <${match.drive_link}|${match.name}>`);
+    }
+  }
+
+  if (fileUploads.length > 0) {
+    try {
+      const commentLines = deliveredAssets.map(m => `*${m.name}*`);
+      const comment = deliveredAssets.length === 1 ? commentLines[0] : commentLines.join("\n");
+      await client.files.uploadV2({
+        channel_id: channelId,
+        initial_comment: comment,
+        file_uploads: fileUploads,
+      });
+      for (const match of deliveredAssets) {
+        console.log(`[ASSET] Sent ${match.name} (${match.file_id}) to ${channelId} (show more)`);
+        postAnalytics(`:art: *Asset delivered* to <@${userId}> (show more)\nAsset: *${match.name}*\nSearch: ${tags.join(", ")}`);
+        trackEvent("asset_delivered", userId, { assetName: match.name, category: match.category, searchTags: tags });
+      }
+    } catch (err) {
+      console.error(`[ASSET] Batch upload failed:`, err.message);
+      const allLinks = deliveredAssets.map(m => `• <${m.drive_link}|${m.name}>`);
+      await client.chat.postMessage({ channel: channelId, text: `Couldn't send files directly. Here are the Drive links:\n${allLinks.join("\n")}`, unfurl_links: false, unfurl_media: false });
+    }
+  }
+
+  if (fallbackLinks.length > 0) {
+    await client.chat.postMessage({ channel: channelId, text: `Some assets couldn't be downloaded directly:\n${fallbackLinks.join("\n")}`, unfurl_links: false, unfurl_media: false });
+  }
+
+  // Remove fetching indicator
+  if (fetchingTs) {
+    try { await client.chat.delete({ channel: channelId, ts: fetchingTs }); } catch {}
+  }
+
+  // Show another "Show More" button for the next batch
+  const nextOffset = offset + matches.length;
+  const nextPayload = JSON.stringify({ tags, category, context, offset: nextOffset });
+  if (nextPayload.length < 2000) {
+    try {
+      await client.chat.postMessage({
+        channel: channelId,
+        text: "Want to see more options?",
+        unfurl_links: false,
+        unfurl_media: false,
+        blocks: [
+          {
+            type: "actions",
+            elements: [{
+              type: "button",
+              text: { type: "plain_text", text: "🔄 Show More Options", emoji: true },
+              action_id: "show_more_assets",
+              value: nextPayload,
+            }],
+          },
+        ],
+      });
+    } catch (err) {
+      console.error("[ASSET] Failed to post Show More button:", err.message);
+    }
   }
 });
 
@@ -658,7 +811,7 @@ const MAX_HISTORY = 20; // keep last 20 messages (10 turns)
 // ────────────────────────────────────────────
 // User profiles — persistent team + preferences
 // ────────────────────────────────────────────
-const USER_PROFILES_FILE = path.resolve(__dirname, "user-profiles.json");
+const USER_PROFILES_FILE = path.resolve(DATA_DIR, "user-profiles.json");
 let userProfiles = {};
 
 function loadUserProfiles() {
@@ -868,6 +1021,7 @@ Illustrations represent all people, all over the world — people of all differe
 Vibrant and multi-layered with warm personality.
 
 If they need a *new custom illustration* not in the library → route to Creative Services (Submit Creative Brief button).
+But ALWAYS search the library FIRST using \`find_illustration\` before suggesting a Creative Brief. The library has hundreds of illustrations and icons — most requests can be served from existing assets.
 
 Direct links:
 • Spot (small) illustrations: <https://brand.hibob.com/s/Spot-illustrations-RmNLE5?v=0|Spot Illustrations>
@@ -1241,8 +1395,18 @@ When someone asks you to create or produce something, redirect clearly: "I can't
 • Don't use bullet-point heavy responses for simple routing. A sentence or two is often enough.
 • Don't repeat the same information if the user has already provided it.
 
-## TOOL USE
-When you've understood enough to route the request, call the \`route_request\` function with your classification. This is for logging and tracking — it does NOT replace your conversational response. Always write a helpful response AND call the function. IMPORTANT: Re-call the function on follow-up messages too if the route is now clear — even if you called it on a previous turn.
+## TOOL USE — TWO TOOLS, DIFFERENT PURPOSES
+You have TWO tools. Choosing the right one is critical:
+
+\`find_illustration\` — *Search the asset library.* Call this when someone asks for an existing illustration, icon, logo, shape, or graphic. This is your FIRST action for any asset request. ALWAYS try the library first before routing to Creative Services. Example: "I need an illustration for a performance review deck" → call \`find_illustration\` immediately.
+
+\`route_request\` — *Log the routing classification.* Call this when someone needs creative WORK done — banners, videos, one-pagers, decks, content review, campaigns, or any production asset. Also call this for brand knowledge questions, template requests, and strategic scoping.
+
+CRITICAL RULE: If someone asks for an illustration, icon, logo, or graphic — call \`find_illustration\` FIRST. Do NOT call \`route_request\` with \`general_creative_services\`. The Creative Brief is for CUSTOM work, not for finding existing assets. Only route to Creative Services if the library search comes up empty and the user needs something custom.
+
+You CAN call both tools in the same response — e.g., search the library AND log the route. But never route to \`general_creative_services\` for an asset that might exist in the library.
+
+IMPORTANT: Re-call \`route_request\` on follow-up messages too if the route is now clear — even if you called it on a previous turn.
 
 ## SUBMIT BUTTON
 Buttons and links are AUTOMATICALLY injected below your message by the system based on routing. NEVER write button labels in your text — no brackets, no markdown, no plain text. You may reference them casually like "hit the button below" but never spell out the button label.
@@ -1363,7 +1527,7 @@ const ROUTE_TOOL = {
 let assetCatalog = [];
 
 function loadAssetCatalog() {
-  const p = path.resolve(__dirname, "assets.json");
+  const p = path.resolve(DATA_DIR, "assets.json");
   if (fs.existsSync(p)) {
     assetCatalog = JSON.parse(fs.readFileSync(p, "utf8"));
     console.log(`Asset catalog loaded: ${assetCatalog.length} assets`);
@@ -2037,7 +2201,8 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     && !(assetType === "video_concept_or_animation") // NEVER show button for animation concepts
     && (adminBypass || !(isVideoRequest && !session.videoValidated))
     && !isLowConfidence
-    && !isRejection;
+    && !isRejection
+    && !illustrationSearch; // Don't show brief button when searching the asset library
   const sessionHasForm = session.formType && !toolCall && !isRejection;
 
   const shouldShowButton = !!(toolHasForm || sessionHasForm) && userCanSubmit;
@@ -2129,7 +2294,8 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     } else {
       // Search with extra buffer to account for filtering out already-delivered assets
       const extraBuffer = session.deliveredAssetIds ? session.deliveredAssetIds.size : 0;
-      const rawMatches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null, 3 + extraBuffer);
+      const searchOffset = illustrationSearch.offset || 0;
+      const rawMatches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null, 3 + extraBuffer, searchOffset);
       // Filter out assets already delivered in this session
       matches = rawMatches.filter(m => !session.deliveredAssetIds || !session.deliveredAssetIds.has(m.file_id));
       if (matches.length > 3) matches = matches.slice(0, 3);
@@ -2195,6 +2361,41 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       // Remove fetching indicator
       if (fetchingTs) {
         try { await client.chat.delete({ channel: channelId, ts: fetchingTs }); } catch {}
+      }
+
+      // Show "Show More" button for non-logo requests
+      if (!isLogoRequest && deliveredAssets.length > 0) {
+        const currentOffset = (illustrationSearch.offset || 0) + matches.length;
+        const showMorePayload = JSON.stringify({
+          tags: illustrationSearch.search_tags,
+          category: illustrationSearch.category || null,
+          context: illustrationSearch.context || "",
+          offset: currentOffset,
+        });
+        // Only show if payload fits in Slack's 2000-char value limit
+        if (showMorePayload.length < 2000) {
+          try {
+            await client.chat.postMessage({
+              channel: channelId,
+              text: "Want to see more options?",
+              unfurl_links: false,
+              unfurl_media: false,
+              blocks: [
+                {
+                  type: "actions",
+                  elements: [{
+                    type: "button",
+                    text: { type: "plain_text", text: "🔄 Show More Options", emoji: true },
+                    action_id: "show_more_assets",
+                    value: showMorePayload,
+                  }],
+                },
+              ],
+            });
+          } catch (err) {
+            console.error("[ASSET] Failed to post Show More button:", err.message);
+          }
+        }
       }
     } else {
       await client.chat.postMessage({
@@ -3067,7 +3268,7 @@ const DEBUG_COMMANDS = {
     assetCatalog.forEach((a) => { byCat[a.category] = (byCat[a.category] || 0) + 1; });
     const byCol = {};
     assetCatalog.forEach((a) => { const c = a.collection || "general"; byCol[c] = (byCol[c] || 0) + 1; });
-    const assetsFile = path.resolve(__dirname, "assets.json");
+    const assetsFile = path.resolve(DATA_DIR, "assets.json");
     let lastModified = "unknown";
     try {
       const stat = fs.statSync(assetsFile);
@@ -3304,7 +3505,7 @@ const ADMIN_COMMANDS = {
     if (!permissions.admin.users.includes(targetId)) {
       permissions.admin.users.push(targetId);
     }
-    fs.writeFileSync(path.resolve(__dirname, "permissions.json"), JSON.stringify(permissions, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "permissions.json"), JSON.stringify(permissions, null, 2));
     return `:white_check_mark: <@${targetId}> added as *admin*.`;
   },
   "add full": async (userId, text) => {
@@ -3316,7 +3517,7 @@ const ADMIN_COMMANDS = {
     if (!permissions.full.users.includes(targetId)) {
       permissions.full.users.push(targetId);
     }
-    fs.writeFileSync(path.resolve(__dirname, "permissions.json"), JSON.stringify(permissions, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "permissions.json"), JSON.stringify(permissions, null, 2));
     return `:white_check_mark: <@${targetId}> added as *full access*.`;
   },
   "add limited": async (userId, text) => {
@@ -3328,7 +3529,7 @@ const ADMIN_COMMANDS = {
     if (!permissions.limited.users.includes(targetId)) {
       permissions.limited.users.push(targetId);
     }
-    fs.writeFileSync(path.resolve(__dirname, "permissions.json"), JSON.stringify(permissions, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "permissions.json"), JSON.stringify(permissions, null, 2));
     return `:white_check_mark: <@${targetId}> added as *limited access*.`;
   },
   "remove user": async (userId, text) => {
@@ -3338,7 +3539,7 @@ const ADMIN_COMMANDS = {
     permissions.admin.users = permissions.admin.users.filter((u) => u !== targetId);
     permissions.full.users = permissions.full.users.filter((u) => u !== targetId);
     permissions.limited.users = permissions.limited.users.filter((u) => u !== targetId);
-    fs.writeFileSync(path.resolve(__dirname, "permissions.json"), JSON.stringify(permissions, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "permissions.json"), JSON.stringify(permissions, null, 2));
     return `:white_check_mark: <@${targetId}> removed from all access tiers.`;
   },
   "list users": async () => {
@@ -3367,7 +3568,7 @@ const ADMIN_COMMANDS = {
     const existing = matchAgency(name);
     if (existing) return `*${existing.name}* is already on the approved list.`;
     agencyWhitelist.push({ name, aliases: [], onboarded: false });
-    fs.writeFileSync(path.resolve(__dirname, "agencies.json"), JSON.stringify({ approved_agencies: agencyWhitelist }, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "agencies.json"), JSON.stringify({ approved_agencies: agencyWhitelist }, null, 2));
     return `:white_check_mark: *${name}* added to the agency whitelist (marked as not yet onboarded).`;
   },
   "remove agency": async (userId, text) => {
@@ -3376,7 +3577,7 @@ const ADMIN_COMMANDS = {
     const existing = matchAgency(name);
     if (!existing) return `Couldn't find *${name}* on the approved list.`;
     agencyWhitelist = agencyWhitelist.filter((a) => a.name !== existing.name);
-    fs.writeFileSync(path.resolve(__dirname, "agencies.json"), JSON.stringify({ approved_agencies: agencyWhitelist }, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "agencies.json"), JSON.stringify({ approved_agencies: agencyWhitelist }, null, 2));
     return `:white_check_mark: *${existing.name}* removed from the agency whitelist.`;
   },
   "onboard agency": async (userId, text) => {
@@ -3385,7 +3586,7 @@ const ADMIN_COMMANDS = {
     const existing = matchAgency(name);
     if (!existing) return `Couldn't find *${name}* on the approved list. Add them first with \`add agency ${name}\`.`;
     existing.onboarded = true;
-    fs.writeFileSync(path.resolve(__dirname, "agencies.json"), JSON.stringify({ approved_agencies: agencyWhitelist }, null, 2));
+    fs.writeFileSync(path.resolve(DATA_DIR, "agencies.json"), JSON.stringify({ approved_agencies: agencyWhitelist }, null, 2));
     return `:white_check_mark: *${existing.name}* marked as onboarded.`;
   },
   "list agencies": async () => {
@@ -3466,13 +3667,14 @@ const ADMIN_COMMANDS = {
     }
 
     return new Promise((resolve) => {
-      const args = [scanScript, driveFolderId, "--resume"];
+      const assetsOutput = path.resolve(DATA_DIR, "assets.json");
+      const args = [scanScript, driveFolderId, "--resume", `--output=${assetsOutput}`];
       if (fs.existsSync(keyFile)) args.push(`--key=${keyFile}`);
 
       execFile("node", args, { timeout: 300000 }, (err, stdout, stderr) => {
         // Reload catalog
         try {
-          const assetsFile = path.resolve(__dirname, "assets.json");
+          const assetsFile = path.resolve(DATA_DIR, "assets.json");
           if (fs.existsSync(assetsFile)) {
             assetCatalog = JSON.parse(fs.readFileSync(assetsFile, "utf8"));
             console.log(`[CATALOG] Reloaded: ${assetCatalog.length} assets`);
