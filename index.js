@@ -1192,7 +1192,7 @@ Typical outputs: social posts, paid ads, meta images for hibob.com, website bann
 
 ### Decks and Presentations
 Google Slides for internal or external use.
-- Internal, single-use → use the official HiBob Google Slides template (self-serve). Share the direct template link. This is NOT a Figma Buzz template — do NOT share Figma Buzz links, the How-To Video, or the Buzz Access Request for slide templates. Just share the Google Slides template link directly.
+- Internal, single-use → use the official HiBob Google Slides template (self-serve). Direct them to <https://docs.google.com/presentation/u/0/?tgif=d&ftv=1|Google Slides Templates> and tell them to click *"HiBob Slide Template 2.0"* from the template gallery at the top. A visual guide will be sent automatically. This is NOT a Figma Buzz template — do NOT share Figma Buzz links, the How-To Video, or the Buzz Access Request for slide templates.
 - Internal, major event with 100+ attendees → eligible for light visual polish from Brand.
 - External-facing or revenue-influencing → General Creative Services form.
 - Single slide graphic → route as Graphics/Icons.
@@ -2267,6 +2267,25 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     });
   } else {
     await say(reply);
+  }
+
+  // ── Send slide template GIF if the reply references it ──
+  const isSlideTemplateResponse = reply.includes("docs.google.com/presentation") || reply.includes("Slide Template 2.0");
+  if (isSlideTemplateResponse && client) {
+    try {
+      const gifPath = path.resolve(__dirname, "slide-template-guide.gif");
+      if (fs.existsSync(gifPath)) {
+        const gifBuffer = fs.readFileSync(gifPath);
+        await client.files.uploadV2({
+          channel_id: channelId,
+          initial_comment: "Here's how to find it — look for *HiBob Slide Template 2.0* in the template gallery:",
+          file_uploads: [{ file: gifBuffer, filename: "slide-template-guide.gif" }],
+        });
+        console.log(`[SLIDES] Sent template guide GIF to ${channelId}`);
+      }
+    } catch (err) {
+      console.error(`[SLIDES] Failed to send GIF:`, err.message);
+    }
   }
 
   // ── Deliver assets if the model searched for them ──
