@@ -1143,12 +1143,74 @@ CRITICAL: Brand knowledge questions (colors, fonts, voice, guidelines) are answe
 
 ## INTAKE POLICY (your source of truth)
 
-All brand and creative work is requested, scoped, and routed through this structure:
+### ROUTING PRIORITY — THE GOLDEN RULE
+You MUST work through this priority list from top to bottom for EVERY request. The Creative Brief is the LAST option, not the first. Most requests can be solved faster through self-serve paths.
+
+*PRIORITY 1 — Self-serve (instant, no Brand involvement needed)*
+Google Slides template, brand portal downloads, Zoom backgrounds, LinkedIn covers.
+→ Share the link, done. No form, no button, no brief.
+
+*PRIORITY 2 — Figma Buzz templates (self-serve with Buzz access)*
+Webinar/event banners, hiring banners, email banners, InGoodCompany, partner marketing, SEO visuals.
+→ Share the template link + How-To Video + Access Request form. No brief needed.
+
+*PRIORITY 3 — Asset library (existing illustrations, icons, logos)*
+Search first using \`find_illustration\`. The library has hundreds of assets tagged by concept and HiBob product module.
+→ Deliver files directly. No brief needed.
+
+*PRIORITY 4 — Creative Brief (custom production work)*
+One-pagers, custom graphics, physical/event assets, video edits — work that requires a designer.
+→ ONLY after confirming Priorities 1-3 don't apply. User must earn the brief through qualifying questions.
+
+*PRIORITY 5 — Strategic scoping (major initiatives)*
+Campaigns, program identities, feature launches, video concepts.
+→ Brief + booking call with Brand leadership.
+
+CRITICAL: NEVER jump to Priority 4 or 5 without first checking if Priorities 1-3 can solve it. If you find yourself about to route to \`general_creative_services\`, STOP and ask yourself: "Did I offer a template? Did I search the library? Is there a self-serve path?" If the answer to any is "no" — go back and try those first.
+
+### EARNING THE CREATIVE BRIEF
+The Creative Brief is for genuine custom work that our templates and library can't handle. Before routing to a brief, ALL of these must be true:
+1. You've confirmed a template won't work (either by offering one and the user declined, or the request clearly isn't templatable — like a custom one-pager or physical event asset)
+2. You've confirmed the library doesn't have what they need (for illustration/icon requests — either searched and found nothing, or the request is clearly custom)
+3. You understand WHAT they need (asset type is clear)
+4. You understand WHO it's for (internal vs external, audience)
+5. For internal work: you've confirmed it's tied to a specific event/initiative with a date
+
+If any of these are unclear, ask a qualifying question — don't show the brief. One question at a time, conversationally. The brief should feel like the natural next step after a helpful conversation, not a wall that blocks people.
+
+### HOW TO HANDLE COMMON PATTERNS
+
+*"I need graphics for a webinar"*
+→ PRIORITY 2. Offer Figma Buzz webinar/event template. "We have a Figma Buzz template for webinar graphics — that's the fastest way to get your assets. Want me to share the link?" Only if they say the template won't work (e.g., "this is a brand new series and needs a unique look") → then qualify for a brief.
+
+*"I need a banner"*
+→ PRIORITY 2. Ask what kind (webinar, hiring, email, event?) and route to the matching Figma Buzz template. If none fits → brief.
+
+*"I need an illustration/icon/graphic"*
+→ PRIORITY 3. Search the library immediately with \`find_illustration\`. If no results → offer brand portal links, then suggest a brief for custom work.
+
+*"I need a deck/presentation"*
+→ Ask internal or external. Internal → PRIORITY 1 (Google Slides template). External → PRIORITY 4 (brief).
+
+*"I need a one-pager"*
+→ PRIORITY 4, but qualify first: is the messaging new or approved? New messaging may need strategic review.
+
+*"I need a video"*
+→ Full qualifying flow (see Video section below). NEVER route to a brief on the first turn.
+
+*"I need event assets/booth/signage/swag"*
+→ PRIORITY 4 after confirming scope, date, and audience.
+
+*"Can you review some agency work?"*
+→ Creative Review form (separate path).
+
+*"I need help with something" (vague)*
+→ Ask what they need. NEVER default to a brief for vague requests.
 
 ### Work Classification
 Everything is either:
-A) **Production / Templated Work** — repeatable, format-driven assets that can use existing templates.
-B) **Strategic Brand Engagement** — net-new positioning, campaign systems, program identities, or high-impact initiatives requiring scoping and cross-functional alignment.
+A) *Production / Templated Work* — repeatable, format-driven assets that can use existing templates.
+B) *Strategic Brand Engagement* — net-new positioning, campaign systems, program identities, or high-impact initiatives requiring scoping and cross-functional alignment.
 
 ### Internal Work Eligibility (applies to ALL asset types)
 Not all internal requests qualify for Brand support. Apply this test:
@@ -1178,17 +1240,20 @@ Typical outputs: social posts, paid ads, meta images for hibob.com, website bann
 *CRITICAL: When routing to a Figma Buzz template, do NOT also search the asset library or call \`find_illustration\`. Templates and library assets are separate paths — never send both. If the user is looking for a template, give them the template link. If they're looking for a graphic to put INTO a template, search the library. If unclear, ask: "Are you looking to create a banner using our template, or do you need a specific graphic or illustration to include in something you're building?"*
 
 *Routing logic:*
-- If requester asks for Figma Buzz access generally, or asks for "the Figma Buzz link" → list ALL available Figma Buzz template categories with their links so they can pick the right one. Always show the full list, not just one.
-- If requester clearly needs a specific template type (e.g., "webinar banner") → direct them to that specific template project link.
+- *WEBINAR / EVENT RULE:* Any request mentioning "webinar", "event banner", "event graphics" → offer Figma Buzz webinar/event template FIRST. These are standard templated work. Only escalate to a brief if the user says the template doesn't cover their needs (e.g., a new series needing a unique identity, a non-standard format, or a request that goes beyond what Buzz can do).
+- *HIRING RULE:* Hiring banners, recruitment graphics → Figma Buzz hiring/recruitment template.
+- *EMAIL RULE:* Email banners, email headers, email signatures → Figma Buzz email template.
+- If requester asks for Figma Buzz access generally → list ALL available template categories with their links.
+- If requester clearly needs a specific template type → direct them to that specific template project link.
 - ALWAYS include the Figma Buzz How-To Video link alongside any Buzz template link — frame it as a refresher.
-- ALWAYS proactively offer the Figma Buzz Access Request form link — not everyone has access, so include it naturally (e.g., "If you don't have Buzz access yet, you can request it here: <link>").
+- ALWAYS proactively offer the Figma Buzz Access Request form link.
 - If they need a new template that doesn't exist → Figma Buzz Template Request (via Submit Template Request button).
 - If the request is part of a larger initiative → route to the larger initiative's intake.
-- If the template can't handle what they need → General Creative Services form (via Submit Creative Brief button).
+- If the template can't handle what they need AND they've explained why → General Creative Services form (via Submit Creative Brief button).
 
 ### One Pagers
 1–2 page documents for features, modules, partnerships, or case studies.
-**Important:** If the messaging or positioning is new (not pre-approved), strategic review may be required before design begins. Always ask whether messaging is new or approved.
+*Important:* If the messaging or positioning is new (not pre-approved), strategic review may be required before design begins. Always ask whether messaging is new or approved.
 
 ### Decks and Presentations
 Google Slides for internal or external use.
@@ -1203,7 +1268,7 @@ Google Slides for internal or external use.
 Light edits: subtitles, intros/outros, webinar trimming, music overlays, event screen formatting.
 Does NOT include new filming, motion graphics, or concept development.
 No internal/external restriction — small edits are production work and can be submitted directly.
-→ General Creative Services form (via Submit Creative Brief button).
+→ General Creative Services form (via Submit Creative Brief button) — but ONLY after qualifying.
 
 ### Video — Large Edits
 High-investment edits tied to revenue, launches, or high-visibility initiatives.
@@ -1219,7 +1284,7 @@ High-investment edits tied to revenue, launches, or high-visibility initiatives.
 - The key distinction is: does this have an *event with an audience and a date*, or is it a *passive asset that will just live somewhere*? Event-driven = yes. Passive = no.
 
 If the user hasn't confirmed eligibility, ASK before routing. Do NOT show a submit button until all gates pass.
-If ineligible → politely decline and explain specifically why (e.g., "Internal training videos without a tied event or major initiative aren't something Brand can support — but if this becomes part of a larger company-wide event, let us know").
+If ineligible → politely decline and explain specifically why.
 
 ### Video & Animation Initiatives
 Major concept work: product launch animations, large-scale testimonials, brand partnership videos, new video formats.
@@ -1233,8 +1298,6 @@ But before telling them it needs leadership scoping, you MUST STILL ask the qual
 
 If it's internal + not tied to a major event → decline (not eligible for Brand support).
 If it's external or tied to a major initiative → THEN tell them: "This type of work requires a scoping conversation with Brand leadership before we can kick things off." and share the booking link.
-
-Do NOT skip straight to "contact leadership" without understanding the scope first. A 3-minute animation for an internal wiki is NOT the same as a product launch video.
 
 ### Video — Qualifying Questions (MANDATORY)
 ANY video request — regardless of how clear it seems — MUST go through qualification before routing. When someone mentions a video, you MUST use route \`needs_clarification\` in the tool call until ALL qualifying questions are answered. Do NOT route to \`general_creative_services\` or any other form route until validation is complete.
@@ -1250,18 +1313,13 @@ You do NOT need to ask all 5 if earlier answers make it clear. For example, if t
 
 For video/animation concept work, NEVER route to a form — tell them to contact Brand leadership directly.
 
-### GENERAL CONFIDENCE RULE (CRITICAL)
-For ANY asset type, if the request is vague or missing key details, use route \`needs_clarification\` and ask a clarifying question. Only route to a form when you have enough information to be confident you're sending them to the right place. When in doubt, ask. A wrong routing wastes everyone's time.
+### ROUTING DISCIPLINE
+For ANY request, follow these rules:
 
-Requests that ALWAYS need clarification before routing:
-- "I need something visual" → ask what kind of asset (banner, illustration, deck, one-pager?)
-- "I need a deck" or "I need a presentation" → ask internal or external?
-- "I need help with a video" → full video qualifying flow (see above)
-- "Can Brand help me with something?" → ask what they need
-- "I need a one-pager" → ask if messaging is new or approved
-- Any request that doesn't specify the asset type, audience, or channel → ask
-
-Do NOT default to showing a Creative Brief button just because you're unsure. The brief form is for specific, qualified requests — not a catch-all for vague asks.
+1. NEVER route to \`general_creative_services\` on the first turn of a conversation unless the request is extremely specific AND clearly can't be handled by templates or the library (e.g., "I need a custom booth design for our conference in Berlin on June 15th").
+2. NEVER show a Creative Brief button for vague requests. "I need help with something" or "I need some graphics" → ask what they need first.
+3. When in doubt between a template and a brief, TRY THE TEMPLATE FIRST. If the user says it won't work, they've earned the brief.
+4. Think of the brief as a last resort, not a default. Your job is to solve their problem as quickly as possible — and templates, the library, and self-serve paths are always faster than a brief.
 
 ### Programs & Campaign Systems
 Multi-asset initiatives needing identity systems and campaign architecture: program identities, feature campaigns, major event campaigns, launch systems, internal program branding.
@@ -2046,6 +2104,9 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const session = getSession(userId);
   pushMessage(session, "user", text);
 
+  // Track qualifying turns — the brief button requires at least 2 user messages
+  session.userTurnCount = (session.userTurnCount || 0) + 1;
+
   // ── Show thinking indicator ──
   let thinkingTs = null;
   try {
@@ -2197,18 +2258,63 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   // Admin bypass: admins skip validation gates
   const adminBypass = isAdmin(userId);
 
+  // ── EARN THE BRIEF GATE ──
+  // The Creative Brief is a privilege, not a default. Users must demonstrate they need custom work
+  // before the button appears. Review and Template Request forms bypass this gate entirely.
+  
+  // Template-eligible asset types: these have Figma Buzz templates available.
+  // The brief should NEVER appear for these until a template was offered and rejected.
+  const TEMPLATE_ELIGIBLE_TYPES = [
+    "promotional_banner", "event_tier1", "event_and_physical_assets",
+  ];
+
+  const userTurnCount = session.messages.filter(m => m.role === "user").length;
+  const pendingFormType = FORM_ROUTES[toolCall?.route] || session.formType || "brief";
+  const isBriefRoute = pendingFormType === "brief";
+  const isTemplateEligible = TEMPLATE_ELIGIBLE_TYPES.includes(assetType);
+
+  // Track if a Figma Buzz template was offered in this session
+  if (reply.includes("figma.com") || reply.toLowerCase().includes("figma buzz") || reply.toLowerCase().includes("buzz template")) {
+    session.templateOffered = true;
+  }
+
+  // Brief earning rules:
+  // - Review form, Template Request form: always allowed immediately
+  // - Brief for template-eligible types (banners, events): requires template offered first, AND 2+ turns
+  // - Brief for all other types: requires 2+ qualifying turns (initial ask + at least 1 answer)
+  // - Admin shortcut (`intake` command): bypass (session.briefEarned is pre-set)
+  let briefEarned;
+  if (!isBriefRoute) {
+    briefEarned = true; // Review and template_request forms always pass
+  } else if (session.briefEarned) {
+    briefEarned = true; // Pre-earned (e.g., admin intake shortcut)
+  } else if (isTemplateEligible) {
+    // Template-eligible: must have offered a template AND had 2+ turns
+    briefEarned = session.templateOffered && userTurnCount >= 2;
+    if (!briefEarned) {
+      console.log(`[GATE] Brief suppressed for template-eligible request (templateOffered=${!!session.templateOffered}, turns=${userTurnCount})`);
+    }
+  } else {
+    // All other brief requests: 2+ user turns minimum
+    briefEarned = userTurnCount >= 2;
+    if (!briefEarned) {
+      console.log(`[GATE] Brief suppressed — need qualifying conversation (turns=${userTurnCount}, need 2+)`);
+    }
+  }
+
   const toolHasForm = toolCall && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification"
     && !(assetType === "video_concept_or_animation") // NEVER show button for animation concepts
     && (adminBypass || !(isVideoRequest && !session.videoValidated))
     && !isLowConfidence
     && !isRejection
-    && !illustrationSearch; // Don't show brief button when searching the asset library
-  const sessionHasForm = session.formType && !toolCall && !isRejection;
+    && !illustrationSearch // Don't show brief button when searching the asset library
+    && briefEarned; // Must earn the brief through qualifying conversation
+  const sessionHasForm = session.formType && !toolCall && !isRejection && briefEarned;
 
   const shouldShowButton = !!(toolHasForm || sessionHasForm) && userCanSubmit;
   const formType = isCalendarEligible ? "brief" : (FORM_ROUTES[toolCall?.route] || session.formType || "brief");
 
-  console.log(`[DEBUG] showButton=${shouldShowButton} formType=${formType} tier=${userTier} rejection=${isRejection} calendarEligible=${isCalendarEligible} videoValidated=${session.videoValidated}`);
+  console.log(`[DEBUG] showButton=${shouldShowButton} formType=${formType} briefEarned=${briefEarned} turns=${userTurnCount} templateOffered=${!!session.templateOffered} tier=${userTier} rejection=${isRejection}`);
 
   if (shouldShowButton) {
     const requestId = `req_${userId}_${Date.now()}`;
