@@ -2292,6 +2292,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
 
   // Brief earning rules:
   // - Review form, Template Request form: always allowed immediately
+  // - Strategic initiatives (isCalendarEligible): always allowed — they self-identified as high-impact
   // - Brief for template-eligible types (banners, events): requires template offered first, AND 2+ turns
   // - Brief for all other types: requires 2+ qualifying turns (initial ask + at least 1 answer)
   // - Admin shortcut (`intake` command): bypass (session.briefEarned is pre-set)
@@ -2300,6 +2301,9 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     briefEarned = true; // Review and template_request forms always pass
   } else if (session.briefEarned) {
     briefEarned = true; // Pre-earned (e.g., admin intake shortcut)
+  } else if (isCalendarEligible) {
+    briefEarned = true; // Strategic initiatives earn the brief immediately — they need the scoping call
+    console.log(`[GATE] Brief auto-earned — strategic initiative (calendar-eligible)`);
   } else if (isTemplateEligible) {
     // Template-eligible: must have offered a template AND had 2+ turns
     briefEarned = session.templateOffered && userTurnCount >= 2;
