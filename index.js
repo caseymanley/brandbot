@@ -1321,6 +1321,13 @@ For ANY request, follow these rules:
 3. When in doubt between a template and a brief, TRY THE TEMPLATE FIRST. If the user says it won't work, they've earned the brief.
 4. Think of the brief as a last resort, not a default. Your job is to solve their problem as quickly as possible — and templates, the library, and self-serve paths are always faster than a brief.
 
+### CRITICAL ROUTE DISTINCTION — REVIEW vs CREATIVE SERVICES
+\`creative_review\` is ONLY for reviewing existing work created by an agency, contractor, or external partner. The user is asking Brand to CHECK someone else's work for brand compliance.
+\`general_creative_services\` is for NEW creative work — things Brand will create from scratch (banners, one-pagers, decks, videos, custom graphics).
+\`strategic_scoping\` is for major initiatives requiring a scoping call — campaigns, program identities, feature launches, brand-new visual systems.
+
+NEVER use \`creative_review\` when someone needs NEW work. "I need a custom visual system for our campaign" = \`strategic_scoping\` with \`strategic_escalation: true\`, NOT \`creative_review\`. If the user isn't asking you to CHECK existing assets, it's not a review.
+
 ### Programs & Campaign Systems
 Multi-asset initiatives needing identity systems and campaign architecture: program identities, feature campaigns, major event campaigns, launch systems, internal program branding.
 These require strategic scoping and early Brand involvement.
@@ -2200,7 +2207,8 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const ALWAYS_STRATEGIC = ["video_concept_or_animation", "programs_and_campaign_system"];
   const isCalendarEligible =
     ALWAYS_STRATEGIC.includes(assetType) ||
-    (toolCall?.strategic_escalation && CALENDAR_ELIGIBLE.includes(assetType));
+    (toolCall?.strategic_escalation === true) || // ANY request flagged as strategic gets the booking link
+    (CALENDAR_ELIGIBLE.includes(assetType) && toolCall?.strategic_escalation);
 
   // ── Standard form routing ──
   if (toolCall && toolCall.route && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification") {
@@ -2208,7 +2216,11 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       console.log(`[DEBUG] Video not yet validated — blocking form button`);
     } else if (isLowConfidence) {
       console.log(`[DEBUG] Low confidence — not setting formType`);
-    } else if (!isCalendarEligible) {
+    } else if (isCalendarEligible) {
+      session.formType = "brief"; // Strategic requests always get brief form
+      session.lastToolCall = toolCall;
+      console.log(`[DEBUG] Strategic request — formType=brief + booking link (route: ${toolCall.route})`);
+    } else {
       session.formType = FORM_ROUTES[toolCall.route];
       session.lastToolCall = toolCall;
       console.log(`[DEBUG] Session flagged formType=${session.formType} (route: ${toolCall.route})`);
@@ -2304,7 +2316,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
 
   const toolHasForm = toolCall && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification"
     && !(assetType === "video_concept_or_animation") // NEVER show button for animation concepts
-    && (adminBypass || !(isVideoRequest && !session.videoValidated))
+    && !(isVideoRequest && !session.videoValidated) // Video ALWAYS requires qualifying — no admin bypass
     && !isLowConfidence
     && !isRejection
     && (!illustrationSearch || briefEarned) // Suppress brief during library search UNLESS brief was earned
