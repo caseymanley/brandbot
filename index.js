@@ -1462,7 +1462,7 @@ You have TWO tools. Choosing the right one is critical:
 
 CRITICAL RULE: If someone asks for an illustration, icon, logo, or graphic — call \`find_illustration\` FIRST. Do NOT call \`route_request\` with \`general_creative_services\`. The Creative Brief is for CUSTOM work, not for finding existing assets. Only route to Creative Services if the library search comes up empty and the user needs something custom.
 
-You CAN call both tools in the same response — e.g., search the library AND log the route. But never route to \`general_creative_services\` for an asset that might exist in the library.
+REVERSE RULE: When routing to \`general_creative_services\` (Creative Brief), do NOT also call \`find_illustration\`. If the user has said a template won't work and they need custom work, they don't need library search results — they need the brief form. Don't mix the two paths.
 
 IMPORTANT: Re-call \`route_request\` on follow-up messages too if the route is now clear — even if you called it on a previous turn.
 
@@ -2307,7 +2307,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     && (adminBypass || !(isVideoRequest && !session.videoValidated))
     && !isLowConfidence
     && !isRejection
-    && !illustrationSearch // Don't show brief button when searching the asset library
+    && (!illustrationSearch || briefEarned) // Suppress brief during library search UNLESS brief was earned
     && briefEarned; // Must earn the brief through qualifying conversation
   const sessionHasForm = session.formType && !toolCall && !isRejection && briefEarned;
 
@@ -2395,11 +2395,13 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   }
 
   // ── Deliver assets if the model searched for them ──
-  // Skip asset delivery for brand knowledge questions AND template/buzz routes (never both)
+  // Skip asset delivery for brand knowledge questions, template/buzz routes, AND creative brief routes
+  // (when the user has earned the brief, they need custom work — not library assets)
   const isBrandQuestion = toolCall?.route === "brand_question";
   const isTemplateRoute = ["figma_buzz_template", "figma_buzz_access_request", "figma_buzz_template_request", "self_serve"].includes(toolCall?.route);
+  const isBriefEarned = toolCall?.route === "general_creative_services" && briefEarned;
   const hasValidSearch = illustrationSearch && illustrationSearch.search_tags && illustrationSearch.search_tags.filter(t => t.trim()).length > 0;
-  if (hasValidSearch && !isBrandQuestion && !isTemplateRoute && client) {
+  if (hasValidSearch && !isBrandQuestion && !isTemplateRoute && !isBriefEarned && client) {
     // Logo requests use the deterministic router instead of fuzzy search
     const isLogoRequest = illustrationSearch.category === "logo";
     let matches;
