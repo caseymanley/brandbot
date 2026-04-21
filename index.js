@@ -691,7 +691,7 @@ function getSession(userId) {
   const now = Date.now();
   let s = sessions[userId];
   if (!s || now - s.lastActivity > SESSION_TTL_MS) {
-    s = { messages: [], lastActivity: now, formType: null, lastToolCall: null, videoValidated: false, videoTurnCount: 0, pendingAssetType: null };
+    s = { messages: [], lastActivity: now, formType: null, lastToolCall: null, videoValidated: false, videoTurnCount: 0, pendingAssetType: null, deliveredAssetIds: new Set() };
     sessions[userId] = s;
   }
   s.lastActivity = now;
@@ -921,37 +921,50 @@ People of all different shapes, colors, and abilities.
 For brand questions beyond what you can answer, direct people to the Brand Services team.
 
 ### ASSET DELIVERY (illustrations, icons, logos, shapes)
-When someone asks for a visual asset FROM THE LIBRARY, you MUST clarify what type before searching:
+When someone asks for a visual asset FROM THE LIBRARY, follow these rules:
 
 CRITICAL DISTINCTION — "TEMPLATE" vs "ASSET":
 - If someone asks for a *template* (Figma Buzz template, slide template, deck template, email template), that is a TEMPLATE REQUEST — route them to Figma Buzz or the Template Request form. Do NOT search the asset library. Templates are production tools, not library assets.
 - If someone asks for an *illustration, icon, logo, shape, or graphic*, that is an ASSET REQUEST — search the library.
 - If ambiguous ("I need something visual for my deck"), ask: "Are you looking for a slide template you can edit yourself, or a specific illustration or graphic to include in your deck?"
 
-1. *Ask about intended use FIRST:* "Where will this graphic be used — a slide, social post, email header, web page, or something else?" This helps determine the right size and format.
-   Recommended sizes by use case:
-   - Social post → 1200×627px (LinkedIn), 1080×1080px (Instagram/Facebook)
-   - Email header → 600×200px
-   - Slide/presentation graphic → 1920×1080px
-   - Small inline icon for a deck → 200×200px or smaller
-   - Hero/section image for a web page → 1400×800px or larger
+CRITICAL RULE — SEARCH IMMEDIATELY WHEN YOU HAVE ENOUGH CONTEXT:
+If the user has provided (a) what type of asset (illustration, icon, logo) AND (b) any concept or use case, SEARCH THE LIBRARY IMMEDIATELY. Do NOT ask more clarifying questions — just call \`find_illustration\` with rich tags. Examples:
+- "I need an illustration for a performance review deck" → You know type (illustration), concept (performance review), use (deck). SEARCH NOW with tags ['performance', 'review', 'feedback', 'goals', 'growth', 'evaluation', 'achievement', 'progress', 'development'].
+- "I need an icon about onboarding" → SEARCH NOW with tags ['onboarding', 'welcome', 'new hire', 'orientation', 'first day', 'joining', 'start'].
+- "I need the HiBob logo" → SEARCH NOW via logo router.
 
-2. *Ask about the type/size:* "Are you looking for a small icon-style graphic, or a larger illustration?" This determines whether we search the icons library or the illustrations library.
-   - *Icon* = small graphic, typically used inline on slides, in UI, or as a spot element. Set category to "icon" when searching.
-   - *Illustration* = larger, more detailed visual, typically used as a section header, hero image, or featured graphic. Set category to "illustration" when searching.
-   - *Logo* = HiBob logo files. Set category to "logo".
-   - *Shape* = abstract brand shapes. Set category to "shape".
-   - If they say something like "something small for a slide" → icon. If they say "a big visual for a section" → illustration.
+ONLY ask clarifying questions when truly ambiguous:
+- They say "I need a graphic" but don't specify icon vs illustration AND don't give a concept → ask.
+- They say "I need something for my slide" but you can't tell template vs asset → ask.
 
-3. *Ask about the concept/subject:* If they haven't described what the image should represent, ask. E.g., "What concept should this convey — teamwork, growth, speed, communication?"
+When you DO need to clarify, ask ONE question, not multiple. Prefer to infer from context rather than asking.
 
-4. *Search with rich tags:* When calling \`find_illustration\`, include both literal and abstract keywords. For "speed": use ['speed', 'fast', 'velocity', 'momentum', 'rocket', 'progress', 'acceleration']. Be generous with tags — more is better for matching.
+Asset type reference (for setting the \`category\` parameter):
+- *Icon* = small graphic, typically used inline on slides, in UI, or as a spot element. Set category to "icon".
+- *Illustration* = larger, more detailed visual, section header, hero image, featured graphic. Set category to "illustration".
+- *Logo* = HiBob logo files. Set category to "logo".
+- *Shape* = abstract brand shapes. Set category to "shape".
+- If they say "something small for a slide" → icon. If they say "a visual for a section" → illustration.
 
-5. *Always set the category* parameter when calling the tool. Never search across all categories unless the user explicitly says they don't care about size.
+Size recommendations (share when relevant, not as a blocking question):
+- Social post → 1200×627px (LinkedIn), 1080×1080px (Instagram/Facebook)
+- Email header → 600×200px
+- Slide/presentation graphic → 1920×1080px
+- Small inline icon for a deck → 200×200px or smaller
+- Hero/section image for a web page → 1400×800px or larger
 
-6. *Present results conversationally:* Describe the top matches and why they'd work for the user's use case. The system will automatically download and send the files.
+1. *Search with rich tags:* When calling \`find_illustration\`, include both literal and abstract keywords. For "speed": use ['speed', 'fast', 'velocity', 'momentum', 'rocket', 'progress', 'acceleration']. Be generous with tags — more is better for matching.
 
-7. If no matches are found, direct them to the brand portal libraries or suggest a Creative Brief for custom work.
+2. *Always set the category* parameter when calling the tool. Never search across all categories unless the user explicitly says they don't care about size.
+
+3. *Include HiBob product module names as search tags* when relevant. If someone asks for an illustration for a "performance review deck", include tags like ['performance', 'review', 'goals', 'feedback', 'growth', 'evaluation']. The asset library is tagged with HiBob module associations: core_hr, onboarding, time_off, time_and_attendance, performance, compensation, payroll, people_analytics, surveys, workforce_planning, hiring, benefits, culture_and_engagement, learning, your_voice, esign.
+
+4. *"Show me more" / additional options:* If the user asks for more options, different options, or to try again, call \`find_illustration\` again with the SAME search_tags and category but set \`offset\` to 3 (or 6 for a third batch, etc.). This skips already-shown results and returns the next set. Always set offset to 0 for initial searches.
+
+5. *Present results conversationally:* Describe the top matches and why they'd work for the user's use case. The system will automatically download and send the files.
+
+6. If no matches are found, direct them to the brand portal libraries or suggest a Creative Brief for custom work.
 
 ### COLLECTION BOUNDARIES — what goes where
 The asset library is organized into collections. Each collection is a separate pool — results ONLY come from the right collection for the request:
@@ -1363,9 +1376,37 @@ function loadAssetCatalog() {
 }
 loadAssetCatalog();
 
-function searchAssets(tags, category = null) {
+function searchAssets(tags, category = null, maxResults = 3, offset = 0) {
   if (!assetCatalog.length) return [];
   const searchTerms = tags.map((t) => t.toLowerCase());
+
+  // ── HR module synonym expansion ──
+  // When someone searches for "payroll" we also want to match "compensation", "salary", etc.
+  const HR_SYNONYMS = {
+    onboarding: ["onboarding", "new hire", "welcome", "preboarding", "first day", "orientation", "joining"],
+    performance: ["performance", "review", "feedback", "goals", "growth", "development", "evaluation", "appraisal", "360"],
+    compensation: ["compensation", "salary", "pay", "bonus", "equity", "raise", "remuneration", "wage"],
+    payroll: ["payroll", "pay", "salary", "wage", "payment", "payday", "paystub"],
+    time_off: ["time off", "pto", "vacation", "leave", "holiday", "absence", "sick day", "day off"],
+    time_and_attendance: ["attendance", "clock", "timesheet", "hours", "schedule", "shift", "tracking"],
+    hiring: ["hiring", "recruitment", "recruiting", "candidate", "applicant", "talent acquisition", "interview", "job posting"],
+    surveys: ["survey", "feedback", "engagement", "pulse", "questionnaire", "satisfaction", "sentiment"],
+    people_analytics: ["analytics", "reporting", "data", "metrics", "dashboard", "kpi", "insights", "headcount", "retention", "turnover"],
+    workforce_planning: ["workforce planning", "headcount", "position", "succession", "org chart", "organizational"],
+    benefits: ["benefits", "insurance", "healthcare", "perks", "wellness"],
+    culture_and_engagement: ["culture", "engagement", "recognition", "kudos", "shoutout", "belonging", "community", "club"],
+    learning: ["learning", "training", "development", "course", "education", "skill"],
+    core_hr: ["core hr", "employee record", "document", "compliance", "workflow", "automation", "esign"],
+    your_voice: ["whistleblower", "anonymous", "report", "misconduct", "speak up"],
+  };
+
+  // Expand search terms with HR synonyms
+  const expandedTerms = [...searchTerms];
+  for (const [module, synonyms] of Object.entries(HR_SYNONYMS)) {
+    if (searchTerms.some(t => synonyms.some(s => s.includes(t) || t.includes(s)))) {
+      expandedTerms.push(module);
+    }
+  }
 
   // ── Collection gates ──
   // These collections are ONLY searchable when explicitly requested via matching keywords.
@@ -1451,6 +1492,15 @@ function searchAssets(tags, category = null) {
         }
       }
 
+      // Match against HR modules (strong signal when someone searches by product area)
+      for (const mod of item.hr_modules || []) {
+        const modLower = mod.toLowerCase();
+        for (const t of expandedTerms) {
+          if (modLower === t) score += 4;
+          else if (modLower.includes(t) || t.includes(modLower)) score += 2;
+        }
+      }
+
       // Boost assets whose collection matches the category being searched
       // This rewards icons from the Icons folder over illustrations that happen to match
       const col = item.collection || "general";
@@ -1483,7 +1533,7 @@ function searchAssets(tags, category = null) {
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
+    .slice(offset, offset + maxResults);
 }
 
 // ────────────────────────────────────────────
@@ -1600,7 +1650,7 @@ const ILLUSTRATION_TOOL = {
   function: {
     name: "find_illustration",
     description:
-      "Search the HiBob brand asset library for illustrations, icons, logos, shapes, or other visual assets. Call this when a user asks for a specific illustration, icon, logo, or brand asset. The library contains AI-analyzed assets with rich keyword matching.",
+      "Search the HiBob brand asset library for illustrations, icons, logos, shapes, or other visual assets. Call this when a user asks for a specific illustration, icon, logo, or brand asset. The library contains AI-analyzed assets with rich keyword matching. Use offset > 0 to show additional results when the user asks for more options.",
     strict: true,
     parameters: {
       type: "object",
@@ -1609,7 +1659,7 @@ const ILLUSTRATION_TOOL = {
         search_tags: {
           type: "array",
           items: { type: "string" },
-          description: "Keywords describing what's needed. Be broad — include the concept, mood, and subject. E.g. for 'speed': ['speed', 'fast', 'velocity', 'momentum', 'rocket', 'progress']",
+          description: "Keywords describing what's needed. Be broad — include the concept, mood, subject, AND any relevant HiBob product module names (e.g. 'onboarding', 'performance', 'payroll', 'compensation', 'time off', 'hiring'). E.g. for 'speed': ['speed', 'fast', 'velocity', 'momentum', 'rocket', 'progress']",
         },
         context: {
           type: "string",
@@ -1619,8 +1669,12 @@ const ILLUSTRATION_TOOL = {
           type: ["string", "null"],
           description: "Filter by asset type: illustration, icon, logo, shape, pattern, photography, background, or null for all",
         },
+        offset: {
+          type: "integer",
+          description: "Number of results to skip (default 0). Use 3 to show the next batch when user asks for more options, 6 for a third batch, etc.",
+        },
       },
-      required: ["search_tags", "context", "category"],
+      required: ["search_tags", "context", "category", "offset"],
     },
   },
 };
@@ -1646,6 +1700,7 @@ async function getResponse(session) {
   // Helper: resolve matches for illustration or logo searches
   function resolveMatches(search) {
     if (!search) return [];
+    const offset = search.offset || 0;
     if (search.category === "logo") {
       const tags = (search.search_tags || []).map(t => t.toLowerCase());
       const VALID_SHAPES = ["wordmark", "rectangle", "square", "round", "hibubble", "bob_platform", "erg_bobbility", "erg_blackatbob", "erg_hipride"];
@@ -1653,9 +1708,9 @@ async function getResponse(session) {
       const shape = tags.find(t => VALID_SHAPES.includes(t)) || "wordmark";
       const bg = tags.find(t => VALID_BGS.includes(t)) || "light";
       const results = findLogo(shape, bg);
-      return results.length ? results : searchAssets(search.search_tags, "logo");
+      return results.length ? results : searchAssets(search.search_tags, "logo", 3, offset);
     }
-    return searchAssets(search.search_tags, search.category || null);
+    return searchAssets(search.search_tags, search.category || null, 3, offset);
   }
 
   const cleanHistory = sanitizeHistory(session.messages);
@@ -2072,7 +2127,12 @@ async function handleIntake({ userId, text, say, channelId, client }) {
         console.log(`[LOGO] Fallback to fuzzy search → ${matches.length} matches`);
       }
     } else {
-      matches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null);
+      // Search with extra buffer to account for filtering out already-delivered assets
+      const extraBuffer = session.deliveredAssetIds ? session.deliveredAssetIds.size : 0;
+      const rawMatches = searchAssets(illustrationSearch.search_tags, illustrationSearch.category || null, 3 + extraBuffer);
+      // Filter out assets already delivered in this session
+      matches = rawMatches.filter(m => !session.deliveredAssetIds || !session.deliveredAssetIds.has(m.file_id));
+      if (matches.length > 3) matches = matches.slice(0, 3);
     }
     if (matches.length > 0) {
       // Show fetching indicator

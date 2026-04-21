@@ -65,12 +65,13 @@ function getDriveAuth() {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ── Vision prompt ──
-const VISION_SYSTEM = `You are a brand asset librarian. Analyze this image and return ONLY a JSON object:
+const VISION_SYSTEM = `You are a brand asset librarian for HiBob, an HR technology company. Analyze this image and return ONLY a JSON object:
 
 {
   "description": "One sentence describing what the image shows",
   "keywords": ["word1", "word2", ...],
   "concepts": ["concept1", "concept2", ...],
+  "hr_modules": ["module1", ...],
   "usage_suggestions": ["suggestion1", ...],
   "style": "illustration|icon|logo|pattern|shape|photo|other",
   "mood": "warm|professional|playful|serious|energetic|calm|bold",
@@ -78,10 +79,11 @@ const VISION_SYSTEM = `You are a brand asset librarian. Analyze this image and r
 }
 
 Rules:
-- "keywords": 10-20 single words someone might search to find this image. Include literal subjects AND abstract concepts. A rocket = rocket, speed, fast, launch, growth, progress, momentum, startup, liftoff, upward, ambition, acceleration.
-- "concepts": 5-10 business/workplace concepts this could illustrate. E.g.: product launch, rapid growth, moving fast, innovation.
-- "usage_suggestions": 3-5 specific uses like "slide about team velocity" or "header for a growth report."
-- Be generous with keywords — include synonyms, related concepts, metaphorical uses.
+- "keywords": 15-25 single words someone might search to find this image. Include literal subjects AND abstract concepts AND metaphorical associations. A rocket = rocket, speed, fast, launch, growth, progress, momentum, startup, liftoff, upward, ambition, acceleration, innovation, boost, takeoff, achievement. A person at a desk = work, office, desk, employee, remote, productivity, focus, workspace, computer, working, professional. Be VERY generous — more keywords means better search results.
+- "concepts": 8-15 business/workplace concepts this could illustrate. Think broadly about what slides, emails, one-pagers, or web pages this image could support. E.g.: product launch, rapid growth, moving fast, innovation, quarterly review, team update.
+- "hr_modules": Which HiBob product modules this image could represent. Choose ALL that apply from: core_hr, onboarding, time_off, time_and_attendance, performance, compensation, payroll, people_analytics, surveys, workforce_planning, hiring, benefits, culture_and_engagement, learning, your_voice, esign. E.g. a calendar icon → ["time_off", "time_and_attendance", "workforce_planning"]. A trophy → ["performance", "culture_and_engagement"]. A chart → ["people_analytics", "compensation"]. If none fit, use an empty array.
+- "usage_suggestions": 5-8 specific uses like "slide about team velocity", "header for a growth report", "onboarding deck section graphic", "payroll announcement email", "performance review cycle launch".
+- Be generous with keywords — include synonyms, related concepts, metaphorical uses. More is always better.
 - Return ONLY valid JSON. No markdown, no backticks.`;
 
 // ── Analyze one image ──
@@ -226,6 +228,7 @@ function buildEntry(file, vision) {
     keywords: hasVision ? (vision.keywords || nt) : nt,
     concepts: hasVision ? (vision.concepts || []) : [],
     usage_suggestions: hasVision ? (vision.usage_suggestions || []) : [],
+    hr_modules: hasVision ? (vision.hr_modules || []) : [],
     description: hasVision ? (vision.description || "") : "",
     style: hasVision ? (vision.style || category) : category,
     mood: hasVision ? (vision.mood || "") : "",
