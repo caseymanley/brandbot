@@ -1317,9 +1317,11 @@ Ask ONE question at a time, in this order:
 You do NOT need to ask all 5 — but you MUST get answers to at least questions 1 AND 2 before routing to any form. Only after you've asked and received answers should you route:
 - Small edit (subtitles, trimming) → \`general_creative_services\`, the brief button appears.
 - Strategic/concept video (external or major event) → \`strategic_scoping\` with \`strategic_escalation: true\`. NOW you can tell them about the brief + booking call, because the buttons will appear.
-- Internal + passive (training, evergreen) → decline, no form.
+- Internal + passive (training, evergreen) → decline, no form. When declining, set \`request_declined: true\` in the tool call so no button appears.
 
 The flow is ALWAYS: qualify first (needs_clarification), THEN route (form). Never skip to the form on turn one.
+
+**WHENEVER you decline or reject any request** (passive internal work, ineligible asset, out of scope) — set \`request_declined: true\` in your route_request tool call. This guarantees no submit button appears alongside your decline message. A decline message with a submit button underneath is contradictory and confusing.
 
 ### ROUTING DISCIPLINE
 For ANY request, follow these rules:
@@ -1571,6 +1573,10 @@ const ROUTE_TOOL = {
           type: ["boolean", "null"],
           description: "For one-pagers and content: whether messaging is new/unapproved.",
         },
+        request_declined: {
+          type: "boolean",
+          description: "Set to TRUE when you are declining/rejecting this request (e.g. passive internal work not eligible for Brand support). When true, NO submit button will be shown. Set to false for normal routable requests.",
+        },
         confidence: {
           type: "string",
           enum: ["high", "medium", "low"],
@@ -1587,6 +1593,7 @@ const ROUTE_TOOL = {
         "strategic_escalation",
         "usage",
         "messaging_is_new",
+        "request_declined",
         "confidence",
         "summary",
       ],
@@ -2276,17 +2283,32 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     "not able to support",
     "isn't something brand can",
     "not something brand can",
+    "aren't something brand can",
+    "something brand can support",  // catches "aren't something Brand can support"
+    "brand can't support",
+    "brand cannot support",
     "aren't eligible",
     "isn't eligible",
     "not eligible",
+    "aren't supported",
+    "isn't supported",
+    "not supported",
     "doesn't meet the criteria",
     "doesn't qualify",
+    "don't qualify",
     "unable to support",
     "politely decline",
     "we'll have to pass",
+    "isn't work brand",
+    "not work brand",
+    "can't take this on",
+    "cannot take this on",
   ];
   const replyLower = reply.toLowerCase();
-  const isRejection = REJECTION_PHRASES.some((phrase) => replyLower.includes(phrase));
+  const phraseRejection = REJECTION_PHRASES.some((phrase) => replyLower.includes(phrase));
+  const flaggedDeclined = toolCall?.request_declined === true;
+  const isRejection = phraseRejection || flaggedDeclined;
+  if (flaggedDeclined) console.log(`[DEBUG] Request explicitly declined via tool flag — button suppressed`);
 
   if (isRejection) {
     console.log(`[DEBUG] Rejection detected in reply — button suppressed`);
