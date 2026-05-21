@@ -844,7 +844,7 @@ function getSession(userId) {
   const now = Date.now();
   let s = sessions[userId];
   if (!s || now - s.lastActivity > SESSION_TTL_MS) {
-    s = { messages: [], lastActivity: now, formType: null, lastToolCall: null, videoValidated: false, videoTurnCount: 0, onePagerValidated: false, onePagerTurnCount: 0, pendingAssetType: null, deliveredAssetIds: new Set() };
+    s = { messages: [], lastActivity: now, formType: null, lastToolCall: null, pendingAssetType: null, deliveredAssetIds: new Set() };
     sessions[userId] = s;
   }
   s.lastActivity = now;
@@ -1166,7 +1166,14 @@ One-pagers, custom graphics, physical/event assets, video edits — work that re
 Campaigns, program identities, feature launches, video concepts.
 → Brief + booking call with Brand leadership.
 
-CRITICAL: NEVER jump to Priority 4 or 5 without first checking if Priorities 1-3 can solve it. If you find yourself about to route to \`general_creative_services\`, STOP and ask yourself: "Did I offer a template? Did I search the library? Is there a self-serve path?" If the answer to any is "no" — go back and try those first.
+CRITICAL: NEVER jump to Priority 4 or 5 without first checking if Priorities 1-3 can solve it. If you find yourself about to set \`next_step: "show_form"\`, STOP and ask: "Did I offer a template? Did I search the library? Is there a self-serve path?" If the answer to any is "no" — go back and try those first (\`clarify\` or \`self_serve\`).
+
+The five priorities map directly to \`next_step\`:
+• Priority 1 & 2 & 3 (self-serve, templates, library) → \`self_serve\` (or deliver library assets)
+• Priority 4 (custom work) → \`show_form\` with \`form_type: "brief"\`
+• Priority 5 (strategic) → \`show_form_plus_booking\`
+• Still gathering info → \`clarify\`
+• Not eligible → \`decline\`
 
 ### EARNING THE CREATIVE BRIEF
 The Creative Brief is for genuine custom work that our templates and library can't handle. Before routing to a brief, ALL of these must be true:
@@ -1286,26 +1293,10 @@ High-investment edits tied to revenue, launches, or high-visibility initiatives.
 If the user hasn't confirmed eligibility, ASK before routing. Do NOT show a submit button until all gates pass.
 If ineligible → politely decline and explain specifically why.
 
-### Video & Animation Initiatives
-Major concept work: product launch animations, large-scale testimonials, brand partnership videos, new video formats.
+### Video & Animation — Qualifying Questions (MANDATORY)
+ANY video request — regardless of how clear it seems — MUST be qualified before routing.
 
-You MUST ask the qualifying questions BEFORE routing — one at a time:
-1. Is this external-facing or internal?
-2. What's the business objective? (revenue, launch, executive visibility?)
-3. What's the timeframe?
-
-While qualifying, use route \`needs_clarification\`. Once you have the answers:
-- If it's internal + not tied to a major event → decline (not eligible for Brand support). Do NOT route to a form.
-- If it's external or tied to a major initiative → route to \`strategic_scoping\` with \`strategic_escalation: true\`. Tell them: "This is a big initiative, so you'll need to do two things: submit a Creative Brief with the details, and book a briefing call so we can scope it together with Brand leadership." The system will show both the brief button and the booking link.
-
-NEVER show a button before qualifying. But once qualified as strategic, the brief + booking call IS the scoping mechanism — route to it.
-
-### Video — Qualifying Questions (MANDATORY)
-ANY video request — regardless of how clear it seems — MUST go through qualification before routing.
-
-**ABSOLUTE RULE: On the FIRST message of any video request, you MUST route to \`needs_clarification\` and ask a qualifying question. NEVER route to \`strategic_scoping\` or \`general_creative_services\` on the first turn of a video request, even if it sounds strategic. "I need a product launch video" → route \`needs_clarification\`, ask question 1. Do NOT route to a form yet.**
-
-**NEVER tell the user to "hit the buttons below" or "submit a brief" or "book a call" while you are still in the qualifying phase. If you are routing to \`needs_clarification\`, your message must ONLY contain your qualifying question — no mention of buttons, briefs, or booking links. The buttons do not exist yet, so promising them confuses the user.**
+**ABSOLUTE RULE: On the FIRST message of any video request, set \`next_step: "clarify"\` and ask a qualifying question. NEVER set \`show_form\` or \`show_form_plus_booking\` on the first turn of a video request, even if it sounds strategic. "I need a product launch video" → \`next_step: "clarify"\`, ask question 1. Your message must contain ONLY the question — no mention of buttons, briefs, or booking calls.**
 
 Ask ONE question at a time, in this order:
 1. What kind of edit? (light touch like subtitles/trimming, or something more involved like a highlight reel, promo, or concept piece?)
@@ -1314,32 +1305,22 @@ Ask ONE question at a time, in this order:
 4. What's the timeframe? When does this need to be live?
 5. What's the business objective? (driving revenue, supporting a launch, executive visibility?)
 
-You do NOT need to ask all 5 — but you MUST get answers to at least questions 1 AND 2 before routing to any form. Only after you've asked and received answers should you route:
-- Small edit (subtitles, trimming) → \`general_creative_services\`, the brief button appears.
-- Strategic/concept video (external or major event) → \`strategic_scoping\` with \`strategic_escalation: true\`. NOW you can tell them about the brief + booking call, because the buttons will appear.
-- Internal + passive (training, evergreen) → decline, no form. When declining, set \`request_declined: true\` in the tool call so no button appears.
-
-The flow is ALWAYS: qualify first (needs_clarification), THEN route (form). Never skip to the form on turn one.
-
-**WHENEVER you decline or reject any request** (passive internal work, ineligible asset, out of scope) — set \`request_declined: true\` in your route_request tool call. This guarantees no submit button appears alongside your decline message. A decline message with a submit button underneath is contradictory and confusing.
+You don't need all 5 — but get answers to at least questions 1 AND 2 before routing. Then:
+- Small edit (subtitles, trimming, light touch) → \`next_step: "show_form"\`, \`form_type: "brief"\`.
+- Strategic/concept video (external, or a major company-wide event) → \`next_step: "show_form_plus_booking"\`, \`form_type: "brief"\`. Tell them they'll submit a brief AND book a scoping call.
+- Internal + passive (training, onboarding, evergreen, not tied to an event) → \`next_step: "decline"\`. Politely explain why.
 
 ### ROUTING DISCIPLINE
-For ANY request, follow these rules:
+1. NEVER set \`show_form\` on the first turn unless the request is extremely specific AND clearly can't be handled by a template or the library (e.g., "I need a custom booth design for our Berlin conference on June 15th"). When in doubt, \`clarify\` first.
+2. NEVER set a form for vague requests. "I need help" / "I need some graphics" → \`clarify\`.
+3. When in doubt between a template and a brief, offer the template first (\`self_serve\`). If the user explains it won't work, then \`show_form\`.
+4. The brief is a last resort, not a default. Templates, the library, and self-serve paths are always faster — try them first.
 
-1. NEVER route to \`general_creative_services\` on the first turn of a conversation unless the request is extremely specific AND clearly can't be handled by templates or the library (e.g., "I need a custom booth design for our conference in Berlin on June 15th").
-2. NEVER show a Creative Brief button for vague requests. "I need help with something" or "I need some graphics" → ask what they need first.
-3. When in doubt between a template and a brief, TRY THE TEMPLATE FIRST. If the user says it won't work, they've earned the brief.
-4. Think of the brief as a last resort, not a default. Your job is to solve their problem as quickly as possible — and templates, the library, and self-serve paths are always faster than a brief.
-
-### CRITICAL ROUTE DISTINCTION — REVIEW vs CREATIVE SERVICES
-\`creative_review\` is ONLY for reviewing existing work created by an agency, contractor, or external partner. The user is asking Brand to CHECK someone else's work for brand compliance.
-\`general_creative_services\` is for NEW creative work — things Brand will create from scratch (banners, one-pagers, decks, videos, custom graphics).
-\`strategic_scoping\` is for major initiatives requiring a scoping call — campaigns, program identities, feature launches, brand-new visual systems.
-
-NEVER use \`creative_review\` when someone needs NEW work. "I need a custom visual system for our campaign" = \`strategic_scoping\` with \`strategic_escalation: true\`, NOT \`creative_review\`. If the user isn't asking you to CHECK existing assets, it's not a review.
+### REVIEW vs CREATIVE WORK
+\`form_type: "review"\` is ONLY for reviewing existing work made by an agency, contractor, or external partner — the user wants Brand to CHECK someone else's work. For any NEW creative work (banners, one-pagers, decks, videos, custom graphics, visual systems), use \`form_type: "brief"\`. "I need a custom visual system for our campaign" → \`show_form_plus_booking\` with \`form_type: "brief"\`, never review.
 
 ### HANDLING DIRECT BRIEF REQUESTS
-If someone says "I want to submit a creative brief" or "I want to submit a brief" with NO other context, don't just show a button blindly and don't leave them hanging. Ask ONE quick qualifying question to understand what they need: "Happy to help you submit a brief! Quick question first — what are you looking to create? (e.g., a one-pager, a custom graphic, a video, an event asset)" Once they answer, route appropriately — they may not even need a brief if it's a template or library item. If it IS genuine custom work, the button will appear after they've told you what it's for.
+If someone says "I want to submit a brief" with no other context, don't show a button blindly and don't leave them hanging. Set \`next_step: "clarify"\` and ask: "Happy to help you submit a brief! Quick question first — what are you looking to create? (e.g., a one-pager, a custom graphic, a video, an event asset)" They may not even need a brief if a template or the library covers it.
 
 ### Programs & Campaign Systems
 Multi-asset initiatives needing identity systems and campaign architecture: program identities, feature campaigns, major event campaigns, launch systems, internal program branding.
@@ -1473,29 +1454,47 @@ When someone asks you to create or produce something, redirect clearly: "I can't
 • Don't use bullet-point heavy responses for simple routing. A sentence or two is often enough.
 • Don't repeat the same information if the user has already provided it.
 
-## TOOL USE — TWO TOOLS, DIFFERENT PURPOSES
-You have TWO tools. Choosing the right one is critical:
+## TOOL USE — TWO TOOLS
 
-\`find_illustration\` — *Search the asset library.* Call this when someone asks for an existing illustration, icon, logo, shape, or graphic. This is your FIRST action for any asset request. ALWAYS try the library first before routing to Creative Services. Example: "I need an illustration for a performance review deck" → call \`find_illustration\` immediately.
+You have two tools:
 
-\`route_request\` — *Log the routing classification.* Call this when someone needs creative WORK done — banners, videos, one-pagers, decks, content review, campaigns, or any production asset. Also call this for brand knowledge questions, template requests, and strategic scoping.
+\`find_illustration\` — *Search the asset library* for an existing illustration, icon, logo, shape, or graphic. Call this when the user wants an existing visual asset. The system delivers matching files directly.
 
-CRITICAL RULE: If someone asks for an illustration, icon, logo, or graphic — call \`find_illustration\` FIRST. Do NOT call \`route_request\` with \`general_creative_services\`. The Creative Brief is for CUSTOM work, not for finding existing assets. Only route to Creative Services if the library search comes up empty and the user needs something custom.
+\`route_request\` — *Classify the request and decide what happens next.* Call this on EVERY turn of an intake conversation. Its most important field is \`next_step\`, which controls exactly what the system does.
 
-REVERSE RULE: When routing to \`general_creative_services\` (Creative Brief), do NOT also call \`find_illustration\`. If the user has said a template won't work and they need custom work, they don't need library search results — they need the brief form. Don't mix the two paths.
+### Choosing next_step (this is the heart of intake)
 
-IMPORTANT: Re-call \`route_request\` on follow-up messages too if the route is now clear — even if you called it on a previous turn.
+Set \`next_step\` to exactly one of these, based on the WHOLE conversation so far:
 
-## SUBMIT BUTTON
-Buttons and links are AUTOMATICALLY injected below your message by the system based on routing. NEVER write button labels in your text — no brackets, no markdown, no plain text. You may reference them casually like "hit the button below" but never spell out the button label.
+*\`clarify\`* — You don't yet have enough information to route confidently. Your message contains ONLY your question. Do NOT mention buttons, briefs, forms, or booking calls — none will appear. Use this for:
+- The first turn of any video request (always qualify video before routing)
+- The first turn of any one-pager request (ask if messaging is new or approved)
+- Any vague request ("I need help", "I need something visual")
+- Any time you're missing the asset type, audience, or whether a template would work
 
-The system shows:
-- Creative Services / standard routes → "Submit Creative Brief" button
-- Creative Review routes → "Submit Review Request" button
-- Template Request routes → "Submit Template Request" button
-- Strategic / high-impact initiatives → "Submit Creative Brief" button PLUS a booking link for a briefing call
+*\`self_serve\`* — The user can get what they need without a Brand form: a Figma Buzz template, the Google Slides template, the asset library, or a brand portal link. Your message gives them the link or path. No button appears.
 
-For strategic requests, the system automatically shows both the brief button and the booking link. Tell the user they need to do BOTH — submit the brief so Brand has the details, and book the call so they can scope it together. Keep it natural and brief.
+*\`show_form\`* — The request is qualified and genuinely needs a Brand form. Set \`form_type\`:
+- \`brief\` — new creative/production work (custom one-pager, custom graphic, small video edit, event asset)
+- \`review\` — ONLY for reviewing existing work made by an agency/external partner
+- \`template_request\` — requesting a brand-new Figma Buzz template that doesn't exist yet
+The system shows the matching button below your message.
+
+*\`show_form_plus_booking\`* — A strategic initiative that needs both a brief AND a scoping call: campaigns, program/identity systems, feature launches, major or concept videos, brand-new visual systems. Set \`form_type: "brief"\`. The system shows the brief button and a booking link. Tell the user they need to do both.
+
+*\`decline\`* — Not eligible for Brand support (passive internal work like training/onboarding videos or wiki content not tied to an event). Your message politely explains why. No button appears.
+
+### The golden flow
+Qualify FIRST (\`clarify\`), route SECOND. Never jump to a form on the first turn of a video or one-pager request. The brief is something users reach after a helpful conversation — not a default. Always prefer self-serve (templates, library) when it solves their need.
+
+### Library vs form — don't mix
+If the user wants an existing asset, call \`find_illustration\` and set \`next_step: "self_serve"\` (or just deliver — don't also show a brief). If they need custom work a template/library can't provide, use \`show_form\` and do NOT call \`find_illustration\`. Never send library results alongside a brief.
+
+### Re-evaluate every turn
+Call \`route_request\` on every message with your current best \`next_step\`. As the conversation clarifies, your \`next_step\` will move from \`clarify\` to a final outcome.
+
+## SUBMIT BUTTON & BOOKING LINK
+Buttons and booking links are injected automatically by the system based on your \`next_step\`. NEVER write button labels in your text. When your \`next_step\` is \`clarify\`, \`self_serve\`, or \`decline\`, do NOT mention buttons or booking calls at all — none will appear, and promising them confuses the user. Only reference "the button below" or "book a call" when your \`next_step\` is \`show_form\` or \`show_form_plus_booking\`.
 
 ## SLACK FORMATTING RULES (critical)
 You are writing for Slack, NOT Markdown. Follow these rules strictly:
@@ -1517,12 +1516,29 @@ const ROUTE_TOOL = {
   function: {
     name: "route_request",
     description:
-      "Log the intake classification and routing decision. Call this whenever you have enough information to route a request.",
+      "Log the intake classification and decide what happens next. Call this on EVERY turn of an intake conversation. The `next_step` field is the single source of truth for what the system does — choose it carefully based on the whole conversation so far.",
     strict: true,
     parameters: {
       type: "object",
       additionalProperties: false,
       properties: {
+        next_step: {
+          type: "string",
+          description:
+            "What should happen next. This is the MOST IMPORTANT field. Choose exactly one:\n" +
+            "• 'clarify' — You need more information before routing. Your message must ONLY ask a question. NO buttons, NO mention of submitting or booking. Use this whenever you're still qualifying (e.g. first turn of a video or one-pager request, vague asks).\n" +
+            "• 'self_serve' — The user can solve this themselves: a Figma Buzz template, the Google Slides template, the asset library, or a brand portal link. Your message gives them the link/path. NO form button.\n" +
+            "• 'show_form' — The request is qualified and needs a Brand form. The system shows the matching button (set `form_type`). Use for genuine custom production work after qualifying.\n" +
+            "• 'show_form_plus_booking' — Strategic initiative (campaign, program identity, feature launch, major/concept video, brand-new visual system). System shows the form button AND a booking link for a scoping call. Only after qualifying.\n" +
+            "• 'decline' — Not eligible for Brand support (e.g. passive internal work like training/onboarding videos not tied to an event). Your message politely explains why. NO button.",
+          enum: ["clarify", "self_serve", "show_form", "show_form_plus_booking", "decline"],
+        },
+        form_type: {
+          type: ["string", "null"],
+          description:
+            "Required when next_step is 'show_form' or 'show_form_plus_booking'. Which form button to show: 'brief' (Creative Brief, for new creative/production work), 'review' (Review Request, ONLY for checking existing agency/external work), 'template_request' (request a new Figma Buzz template). Null otherwise.",
+          enum: ["brief", "review", "template_request", null],
+        },
         asset_type: {
           type: "string",
           enum: [
@@ -1544,42 +1560,9 @@ const ROUTE_TOOL = {
             "other",
           ],
         },
-        route: {
-          type: "string",
-          enum: [
-            "figma_buzz_template",
-            "figma_buzz_access_request",
-            "figma_buzz_template_request",
-            "general_creative_services",
-            "creative_review",
-            "strategic_scoping",
-            "self_serve",
-            "brand_question",
-            "needs_clarification",
-          ],
-        },
         buzz_category: {
           type: ["string", "null"],
-          description: "If routing to a Figma Buzz template, which one.",
-        },
-        strategic_escalation: {
-          type: "boolean",
-        },
-        usage: {
-          type: ["string", "null"],
-          description: "Where the asset will be used, if known.",
-        },
-        messaging_is_new: {
-          type: ["boolean", "null"],
-          description: "For one-pagers and content: whether messaging is new/unapproved.",
-        },
-        request_declined: {
-          type: "boolean",
-          description: "Set to TRUE when you are declining/rejecting this request (e.g. passive internal work not eligible for Brand support). When true, NO submit button will be shown. Set to false for normal routable requests.",
-        },
-        confidence: {
-          type: "string",
-          enum: ["high", "medium", "low"],
+          description: "If pointing to a Figma Buzz template, which one.",
         },
         summary: {
           type: "string",
@@ -1587,14 +1570,10 @@ const ROUTE_TOOL = {
         },
       },
       required: [
+        "next_step",
+        "form_type",
         "asset_type",
-        "route",
         "buzz_category",
-        "strategic_escalation",
-        "usage",
-        "messaging_is_new",
-        "request_declined",
-        "confidence",
         "summary",
       ],
     },
@@ -1998,7 +1977,7 @@ async function getResponse(session) {
     }
   }
 
-  console.log(`[DEBUG] LLM response — text: ${text ? "yes" : "no"} (${text.length} chars), toolCall: ${toolCall ? toolCall.asset_type + "/" + toolCall.route : "none"}, illustration: ${illustrationSearch ? illustrationSearch.search_tags.join(",") : "none"}`);
+  console.log(`[DEBUG] LLM response — text: ${text ? "yes" : "no"} (${text.length} chars), toolCall: ${toolCall ? toolCall.asset_type + "/" + toolCall.next_step : "none"}, illustration: ${illustrationSearch ? illustrationSearch.search_tags.join(",") : "none"}`);
 
   // If the model ONLY made tool call(s) with no text, get the text via follow-up
   if (!text && (toolCall || illustrationSearch)) {
@@ -2007,7 +1986,7 @@ async function getResponse(session) {
     for (const tc of choice.message.tool_calls) {
       let resultContent = {};
       if (tc.function.name === "route_request" && toolCall) {
-        resultContent = { status: "logged", route: toolCall.route };
+        resultContent = { status: "logged", next_step: toolCall.next_step };
       } else if (tc.function.name === "find_illustration" && illustrationSearch) {
         const matches = resolveMatches(illustrationSearch);
         resultContent = {
@@ -2032,7 +2011,7 @@ async function getResponse(session) {
     const toolResponseMsgs = choice.message.tool_calls.map((tc) => {
       let content = {};
       if (tc.function.name === "route_request" && toolCall) {
-        content = { status: "logged", route: toolCall.route };
+        content = { status: "logged", next_step: toolCall.next_step };
       } else if (tc.function.name === "find_illustration" && illustrationSearch) {
         const matches = resolveMatches(illustrationSearch);
         content = {
@@ -2129,9 +2108,6 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const session = getSession(userId);
   pushMessage(session, "user", text);
 
-  // Track qualifying turns — the brief button requires at least 2 user messages
-  session.userTurnCount = (session.userTurnCount || 0) + 1;
-
   // ── Show thinking indicator ──
   let thinkingTs = null;
   try {
@@ -2163,273 +2139,31 @@ async function handleIntake({ userId, text, say, channelId, client }) {
 
   pushMessage(session, "assistant", reply);
 
-  // ── Determine if we should show a submit button ──
+  // ════════════════════════════════════════════════════════════════
+  // INTAKE DECISION — single source of truth: toolCall.next_step
+  // The LLM has read the whole conversation and decided what happens next.
+  // The code's only job is to render that decision. No keyword detection,
+  // no turn counting, no phrase-matching, no reply rewriting.
+  // The ONE thing code owns: permissions (who may submit at all).
+  // ════════════════════════════════════════════════════════════════
 
-  const FORM_ROUTES = {
-    general_creative_services: "brief",
-    strategic_scoping: "brief",
-    creative_review: "review",
-    figma_buzz_template_request: "template_request",
-  };
+  const nextStep = toolCall?.next_step || null;
+  const formType = toolCall?.form_type || "brief"; // brief | review | template_request
+  const wantsForm = nextStep === "show_form" || nextStep === "show_form_plus_booking";
+  const wantsBooking = nextStep === "show_form_plus_booking";
 
-  // ── HARD VIDEO GATE ──
-  // Video asset types get NO button until explicit session validation.
-  // The model keeps skipping needs_clarification, so we enforce it in code.
-  const VIDEO_ASSETS = ["video_small_edit", "video_large_edit", "video_concept_or_animation"];
+  const userCanSubmit = canSubmitForms(userId);
+  const showButton = wantsForm && userCanSubmit;
 
-  // If the LLM classified a fresh asset type that differs from what's pending, the user has
-  // moved to a NEW request. Clear stale per-request validation state so gates re-evaluate cleanly.
-  if (toolCall?.asset_type && session.pendingAssetType && toolCall.asset_type !== session.pendingAssetType) {
-    const wasVideo = VIDEO_ASSETS.includes(session.pendingAssetType);
-    const nowVideo = VIDEO_ASSETS.includes(toolCall.asset_type);
-    if (wasVideo !== nowVideo) {
-      session.videoValidated = false;
-      session.videoTurnCount = 0;
-      session.onePagerValidated = false;
-      session.onePagerTurnCount = 0;
-      console.log(`[DEBUG] Asset type changed (${session.pendingAssetType} → ${toolCall.asset_type}) — reset per-request gates`);
-    }
-  }
-
-  const assetType = toolCall?.asset_type || session.pendingAssetType || null;
-
-  // Detect video requests by keyword too — the LLM sometimes classifies "product launch video"
-  // as feature_launch/campaign, which would skip the video qualifying gate. Catch it here.
-  // IMPORTANT: only check the CURRENT message (not history) to avoid stale video context from
-  // a prior request bleeding into a new, unrelated request. And if the LLM explicitly classified
-  // this as a non-video asset type, trust that over the keyword heuristic.
-  const NON_VIDEO_TYPES = ["one_pager", "deck", "single_slide_graphic", "promotional_banner",
-    "graphics_illustration_icons", "event_and_physical_assets", "content_blog_guide", "creative_review"];
-  const routeIsBrief = (FORM_ROUTES[toolCall?.route] || session.formType) === "brief";
-  const currentMsgLower = (text || "").toLowerCase();
-  const mentionsVideo = /\b(video|animation|animated|motion graphic|highlight reel|sizzle)\b/.test(currentMsgLower);
-  const llmClassifiedNonVideo = NON_VIDEO_TYPES.includes(toolCall?.asset_type);
-  const isVideoRequest = VIDEO_ASSETS.includes(assetType) ||
-    (mentionsVideo && routeIsBrief && !llmClassifiedNonVideo);
-
-  // Count video qualifying turns for ALL video types
-  if (isVideoRequest && !session.videoValidated) {
-    session.pendingAssetType = assetType;
-    const videoTurnCount = (session.videoTurnCount || 0) + 1;
-    session.videoTurnCount = videoTurnCount;
-
-    // Video requires at least 2 qualifying turns (initial ask + at least 1 answer about scope/audience).
-    // After qualification, the button is allowed — whether it's an edit (brief) or a
-    // strategic concept (brief + booking link). The scoping call IS the leadership review.
-    if (videoTurnCount >= 2 && toolCall && (FORM_ROUTES[toolCall.route] || toolCall.strategic_escalation)) {
-      session.videoValidated = true;
-      console.log(`[DEBUG] Video validated after ${videoTurnCount} turns (route: ${toolCall.route}, strategic: ${!!toolCall.strategic_escalation})`);
-    } else {
-      console.log(`[DEBUG] Video turn ${videoTurnCount} — button suppressed until qualification complete (route: ${toolCall?.route || "none"})`);
-    }
-  }
-
-  // ── ONE-PAGER GATE ──
-  // One-pagers need the "is the messaging new or approved?" question answered first.
-  // If messaging is new, strategic review may be needed before design.
-  const isOnePager = assetType === "one_pager";
-  if (isOnePager && !session.onePagerValidated) {
-    const opTurnCount = (session.onePagerTurnCount || 0) + 1;
-    session.onePagerTurnCount = opTurnCount;
-    // Validated once they've had a qualifying exchange (2+ turns) — the messaging question
-    if (opTurnCount >= 2) {
-      session.onePagerValidated = true;
-      console.log(`[DEBUG] One-pager validated after ${opTurnCount} turns`);
-    } else {
-      console.log(`[DEBUG] One-pager turn ${opTurnCount} — button suppressed until messaging status confirmed`);
-    }
-  }
-
-  // ── GENERAL CONFIDENCE GATE ──
-  // If the model reports low confidence, suppress buttons regardless of asset type
-  const isLowConfidence = toolCall?.confidence === "low";
-  if (isLowConfidence) {
-    console.log(`[DEBUG] Low confidence (${toolCall?.asset_type}) — button suppressed`);
-  }
-
-  // ── STRATEGIC / CALENDAR GATE ──
-  // Strategic initiatives get brief button + booking link
-  const CALENDAR_ELIGIBLE = [
-    "programs_and_campaign_system",
-    "campaign",
-    "event_tier1",
-    "feature_launch",
-    "video_concept_or_animation",
-  ];
-  // Always strategic (no flag needed)
-  const ALWAYS_STRATEGIC = ["video_concept_or_animation", "programs_and_campaign_system"];
-  const isCalendarEligible =
-    ALWAYS_STRATEGIC.includes(assetType) ||
-    (toolCall?.strategic_escalation === true) || // ANY request flagged as strategic gets the booking link
-    (CALENDAR_ELIGIBLE.includes(assetType) && toolCall?.strategic_escalation);
-
-  // ── Standard form routing ──
-  if (toolCall && toolCall.route && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification") {
-    if (isVideoRequest && !session.videoValidated) {
-      console.log(`[DEBUG] Video not yet validated — blocking form button`);
-    } else if (isLowConfidence) {
-      console.log(`[DEBUG] Low confidence — not setting formType`);
-    } else if (isCalendarEligible) {
-      session.formType = "brief"; // Strategic requests always get brief form
-      session.lastToolCall = toolCall;
-      console.log(`[DEBUG] Strategic request — formType=brief + booking link (route: ${toolCall.route})`);
-    } else {
-      session.formType = FORM_ROUTES[toolCall.route];
-      session.lastToolCall = toolCall;
-      console.log(`[DEBUG] Session flagged formType=${session.formType} (route: ${toolCall.route})`);
-    }
-  }
-
-  // Strategic video concepts that have been qualified should also set formType
-  if (isVideoRequest && session.videoValidated && isCalendarEligible && !session.formType) {
-    session.formType = "brief";
-    session.lastToolCall = toolCall;
-    console.log(`[DEBUG] Strategic video validated — formType=brief + booking link`);
-  }
-
-  if (toolCall && toolCall.route === "needs_clarification") {
+  // Persist asset type / last tool call for downstream form modals + analytics
+  if (toolCall?.asset_type) {
     session.pendingAssetType = toolCall.asset_type;
     session.lastToolCall = toolCall;
-    session.formType = null;
-    console.log(`[DEBUG] Clarification turn — button suppressed (asset: ${toolCall.asset_type})`);
   }
 
-  // ── Decide what to show ──
+  console.log(`[INTAKE] next_step=${nextStep} form_type=${formType} showButton=${showButton} canSubmit=${userCanSubmit} asset=${toolCall?.asset_type || "none"}`);
 
-  // BUG FIX: Detect rejection responses — if the bot is declining the request,
-  // don't show a button even if the model routed to a form
-  const REJECTION_PHRASES = [
-    "can't support",
-    "cannot support",
-    "isn't able to support",
-    "not able to support",
-    "isn't something brand can",
-    "not something brand can",
-    "aren't something brand can",
-    "something brand can support",  // catches "aren't something Brand can support"
-    "brand can't support",
-    "brand cannot support",
-    "aren't eligible",
-    "isn't eligible",
-    "not eligible",
-    "aren't supported",
-    "isn't supported",
-    "not supported",
-    "doesn't meet the criteria",
-    "doesn't qualify",
-    "don't qualify",
-    "unable to support",
-    "politely decline",
-    "we'll have to pass",
-    "isn't work brand",
-    "not work brand",
-    "can't take this on",
-    "cannot take this on",
-  ];
-  const replyLower = reply.toLowerCase();
-  const phraseRejection = REJECTION_PHRASES.some((phrase) => replyLower.includes(phrase));
-  const flaggedDeclined = toolCall?.request_declined === true;
-  const isRejection = phraseRejection || flaggedDeclined;
-  if (flaggedDeclined) console.log(`[DEBUG] Request explicitly declined via tool flag — button suppressed`);
-
-  if (isRejection) {
-    console.log(`[DEBUG] Rejection detected in reply — button suppressed`);
-    session.formType = null;
-    trackEvent("request_rejected", userId, { assetType: assetType || "unknown" }); // Clear any stale form type
-  }
-
-  // PERMISSIONS: Check if user can submit forms
-  const userCanSubmit = canSubmitForms(userId);
-  const userTier = getUserTier(userId);
-
-  // Admin bypass: admins skip validation gates
-  const adminBypass = isAdmin(userId);
-
-  // ── EARN THE BRIEF GATE ──
-  // The Creative Brief is a privilege, not a default. Users must demonstrate they need custom work
-  // before the button appears. Review and Template Request forms bypass this gate entirely.
-  
-  // Template-eligible asset types: these have Figma Buzz templates available.
-  // The brief should NEVER appear for these until a template was offered and rejected.
-  const TEMPLATE_ELIGIBLE_TYPES = [
-    "promotional_banner", "event_tier1", "event_and_physical_assets",
-  ];
-
-  const userTurnCount = session.messages.filter(m => m.role === "user").length;
-  const pendingFormType = FORM_ROUTES[toolCall?.route] || session.formType || "brief";
-  const isBriefRoute = pendingFormType === "brief";
-  const isTemplateEligible = TEMPLATE_ELIGIBLE_TYPES.includes(assetType);
-
-  // Track if a Figma Buzz template was offered in this session
-  if (reply.includes("figma.com") || reply.toLowerCase().includes("figma buzz") || reply.toLowerCase().includes("buzz template")) {
-    session.templateOffered = true;
-  }
-
-  // Brief earning rules:
-  // - Review form, Template Request form: always allowed immediately
-  // - Strategic initiatives (isCalendarEligible): always allowed — they self-identified as high-impact
-  // - Brief for template-eligible types (banners, events): requires template offered first, AND 2+ turns
-  // - Brief for all other types: requires 2+ qualifying turns (initial ask + at least 1 answer)
-  // - Admin shortcut (`intake` command): bypass (session.briefEarned is pre-set)
-  let briefEarned;
-  if (!isBriefRoute) {
-    briefEarned = true; // Review and template_request forms always pass
-  } else if (session.briefEarned) {
-    briefEarned = true; // Pre-earned (e.g., admin intake shortcut)
-  } else if (isCalendarEligible) {
-    // Strategic initiatives earn the brief, BUT video and one-pager still need their
-    // specific qualifying question first (handled by dedicated gates below).
-    briefEarned = true;
-    console.log(`[GATE] Brief auto-earned — strategic initiative (calendar-eligible)`);
-  } else if (isTemplateEligible) {
-    // Template-eligible: must have offered a template AND had 2+ turns
-    briefEarned = session.templateOffered && userTurnCount >= 2;
-    if (!briefEarned) {
-      console.log(`[GATE] Brief suppressed for template-eligible request (templateOffered=${!!session.templateOffered}, turns=${userTurnCount})`);
-    }
-  } else {
-    // All other brief requests: 2+ user turns minimum
-    briefEarned = userTurnCount >= 2;
-    if (!briefEarned) {
-      console.log(`[GATE] Brief suppressed — need qualifying conversation (turns=${userTurnCount}, need 2+)`);
-    }
-  }
-
-  const toolHasForm = toolCall && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification"
-    && !(isVideoRequest && !session.videoValidated) // Video ALWAYS requires qualifying first — applies to all users
-    && !(isOnePager && !session.onePagerValidated) // One-pager needs messaging status confirmed first
-    && !isLowConfidence
-    && !isRejection
-    && (!illustrationSearch || briefEarned) // Suppress brief during library search UNLESS brief was earned
-    && briefEarned; // Must earn the brief through qualifying conversation
-  // sessionHasForm covers cases where the form was validated on a prior turn (e.g. strategic video
-  // qualified, then the route comes through). Only applies when the current turn isn't itself
-  // routing to clarification (which clears formType) — prevents stale buttons on unrelated turns.
-  const currentTurnClarifies = toolCall && toolCall.route === "needs_clarification";
-  const sessionHasForm = session.formType && !isRejection && briefEarned
-    && !currentTurnClarifies
-    && !(isVideoRequest && !session.videoValidated)
-    && !(isOnePager && !session.onePagerValidated);
-
-  const shouldShowButton = !!(toolHasForm || sessionHasForm) && userCanSubmit;
-  const formType = isCalendarEligible ? "brief" : (FORM_ROUTES[toolCall?.route] || session.formType || "brief");
-
-  // SAFETY NET: If we're suppressing the button (video/one-pager not yet qualified) but the LLM's
-  // reply promises buttons, the message is misleading. Replace it with a clean qualifying nudge.
-  const gateSuppressing = (isVideoRequest && !session.videoValidated) || (isOnePager && !session.onePagerValidated);
-  const replyPromisesButton = /hit the button|button below|submit (a |your )?(creative )?brief|book a (briefing )?call|buttons below/i.test(reply);
-  if (gateSuppressing && !shouldShowButton && replyPromisesButton) {
-    console.log(`[DEBUG] Reply promised a button but gate is suppressing — replacing with qualifying nudge`);
-    if (isVideoRequest) {
-      reply = "Happy to help with your video! First, a couple quick questions so I route this correctly: is this an internal or external-facing video, and is it tied to a specific event or launch with a date?";
-    } else if (isOnePager) {
-      reply = "Happy to help with your one-pager! Quick question first: is the messaging and positioning already approved, or is this new messaging? That determines whether it needs a strategic review before design.";
-    }
-  }
-
-  console.log(`[DEBUG] showButton=${shouldShowButton} formType=${formType} briefEarned=${briefEarned} turns=${userTurnCount} templateOffered=${!!session.templateOffered} tier=${userTier} rejection=${isRejection}`);
-
-  if (shouldShowButton) {
+  if (showButton) {
     const requestId = `req_${userId}_${Date.now()}`;
     pendingRequests[requestId] = {
       userId,
@@ -2446,14 +2180,8 @@ async function handleIntake({ userId, text, say, channelId, client }) {
     const buttonLabel = buttonLabels[formType] || buttonLabels.brief;
     const actionId = actionIds[formType] || actionIds.brief;
 
-    console.log(`[DEBUG] Sending ${formType} button (requestId: ${requestId})${isCalendarEligible ? " + booking link" : ""}`);
-
-    // Build blocks
     const blocks = [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: safeReply },
-      },
+      { type: "section", text: { type: "mrkdwn", text: safeReply } },
       { type: "divider" },
       {
         type: "actions",
@@ -2469,8 +2197,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       },
     ];
 
-    // For strategic/calendar-eligible: add booking link below the button
-    if (isCalendarEligible) {
+    if (wantsBooking) {
       blocks.push({
         type: "section",
         text: {
@@ -2480,11 +2207,11 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       });
     }
 
-    await say({
-      text: reply,
-      blocks,
-    });
+    await say({ text: reply, blocks });
   } else {
+    if (wantsForm && !userCanSubmit) {
+      console.log(`[INTAKE] Form wanted but user ${userId} lacks submit permission — message only`);
+    }
     await say(reply);
   }
 
@@ -2508,13 +2235,12 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   }
 
   // ── Deliver assets if the model searched for them ──
-  // Skip asset delivery for brand knowledge questions, template/buzz routes, AND creative brief routes
-  // (when the user has earned the brief, they need custom work — not library assets)
-  const isBrandQuestion = toolCall?.route === "brand_question";
-  const isTemplateRoute = ["figma_buzz_template", "figma_buzz_access_request", "figma_buzz_template_request", "self_serve"].includes(toolCall?.route);
-  const isBriefEarned = toolCall?.route === "general_creative_services" && briefEarned;
+  // Assets are delivered when the LLM ran a library search AND it isn't routing to a form,
+  // decline, or self-serve link. The illustrationSearch presence is the signal — the LLM only
+  // calls find_illustration when it genuinely wants to deliver library assets.
   const hasValidSearch = illustrationSearch && illustrationSearch.search_tags && illustrationSearch.search_tags.filter(t => t.trim()).length > 0;
-  if (hasValidSearch && !isBrandQuestion && !isTemplateRoute && !isBriefEarned && client) {
+  const blocksAssetDelivery = wantsForm || nextStep === "decline";
+  if (hasValidSearch && !blocksAssetDelivery && client) {
     // Logo requests use the deterministic router instead of fuzzy search
     const isLogoRequest = illustrationSearch.category === "logo";
     let matches;
@@ -2903,7 +2629,7 @@ app.view("brief_step2", async ({ ack, view, body, client }) => {
       toolCall: pending.toolCall || { asset_type: step1.assetType },
       teamValue: step1.team?.value,
       dueDate: step1.dueDate,
-      isStrategic: pending.toolCall?.strategic_escalation,
+      isStrategic: pending.toolCall?.next_step === "show_form_plus_booking",
       slackUserGid: asanaUserGid,
       email,
     });
@@ -2936,7 +2662,7 @@ app.view("brief_step2", async ({ ack, view, body, client }) => {
     let confirmText = `:white_check_mark: Your ${assetLabel} request *${step1.name}* has been submitted to Brand Services.`;
     if (taskUrl) confirmText += `\n<${taskUrl}|View task in Asana>`;
 
-    const isStrategic = pending.toolCall?.strategic_escalation;
+    const isStrategic = pending.toolCall?.next_step === "show_form_plus_booking";
     if (isStrategic) {
       confirmText += `\n\n:warning: This request involves strategic work — Brand leadership will reach out for scoping before production begins.`;
     }
@@ -3460,10 +3186,8 @@ const DEBUG_COMMANDS = {
     return [
       `*Session Debug for <@${userId}>*`,
       `Messages in history: ${session.messages.length}`,
-      `Form type: ${session.formType || "none"}`,
-      `Video validated: ${session.videoValidated || false}`,
-      `Video turn count: ${session.videoTurnCount || 0}`,
       `Pending asset type: ${session.pendingAssetType || "none"}`,
+      `Last next_step: ${session.lastToolCall?.next_step || "none"}`,
       `Last activity: ${new Date(session.lastActivity).toISOString()}`,
       `Last tool call: ${session.lastToolCall ? JSON.stringify(session.lastToolCall, null, 2) : "none"}`,
     ].join("\n");
