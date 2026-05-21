@@ -2176,14 +2176,36 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   // Video asset types get NO button until explicit session validation.
   // The model keeps skipping needs_clarification, so we enforce it in code.
   const VIDEO_ASSETS = ["video_small_edit", "video_large_edit", "video_concept_or_animation"];
+
+  // If the LLM classified a fresh asset type that differs from what's pending, the user has
+  // moved to a NEW request. Clear stale per-request validation state so gates re-evaluate cleanly.
+  if (toolCall?.asset_type && session.pendingAssetType && toolCall.asset_type !== session.pendingAssetType) {
+    const wasVideo = VIDEO_ASSETS.includes(session.pendingAssetType);
+    const nowVideo = VIDEO_ASSETS.includes(toolCall.asset_type);
+    if (wasVideo !== nowVideo) {
+      session.videoValidated = false;
+      session.videoTurnCount = 0;
+      session.onePagerValidated = false;
+      session.onePagerTurnCount = 0;
+      console.log(`[DEBUG] Asset type changed (${session.pendingAssetType} → ${toolCall.asset_type}) — reset per-request gates`);
+    }
+  }
+
   const assetType = toolCall?.asset_type || session.pendingAssetType || null;
 
   // Detect video requests by keyword too — the LLM sometimes classifies "product launch video"
   // as feature_launch/campaign, which would skip the video qualifying gate. Catch it here.
+  // IMPORTANT: only check the CURRENT message (not history) to avoid stale video context from
+  // a prior request bleeding into a new, unrelated request. And if the LLM explicitly classified
+  // this as a non-video asset type, trust that over the keyword heuristic.
+  const NON_VIDEO_TYPES = ["one_pager", "deck", "single_slide_graphic", "promotional_banner",
+    "graphics_illustration_icons", "event_and_physical_assets", "content_blog_guide", "creative_review"];
   const routeIsBrief = (FORM_ROUTES[toolCall?.route] || session.formType) === "brief";
-  const recentUserText = session.messages.filter(m => m.role === "user").slice(-3).map(m => m.content).join(" ").toLowerCase();
-  const mentionsVideo = /\b(video|animation|animated|motion graphic|highlight reel|sizzle|testimonial video|promo video|launch video)\b/.test(recentUserText);
-  const isVideoRequest = VIDEO_ASSETS.includes(assetType) || (mentionsVideo && routeIsBrief);
+  const currentMsgLower = (text || "").toLowerCase();
+  const mentionsVideo = /\b(video|animation|animated|motion graphic|highlight reel|sizzle)\b/.test(currentMsgLower);
+  const llmClassifiedNonVideo = NON_VIDEO_TYPES.includes(toolCall?.asset_type);
+  const isVideoRequest = VIDEO_ASSETS.includes(assetType) ||
+    (mentionsVideo && routeIsBrief && !llmClassifiedNonVideo);
 
   // Count video qualifying turns for ALL video types
   if (isVideoRequest && !session.videoValidated) {
