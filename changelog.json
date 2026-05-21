@@ -71,5 +71,25 @@
       "Slide template fix — Google Slides link only, no Buzz links",
       "Deployed to Railway"
     ]
+  },
+  {
+    "version": "1.4.0",
+    "date": "2026-05-21",
+    "changes": [
+      "Rebuilt intake on a single next_step decision field (clarify / self_serve / show_form / show_form_plus_booking / decline) — replaces the tangled gate logic with one predictable renderer",
+      "Region identification added to onboarding (Global, UKI, DACH, Nordics, Benelux & Eurowest, IL/CEE, APJ, AMER) with multi-select",
+      "Analytics now break down requests by region; new 'set regions' and 'my regions' commands",
+      "Daily Asana task digest — tasks due this week with assignees, subtasks indented under parents, today's tasks flagged; auto-posts to #brandbot-ops weekday mornings; 'daily digest' and 'tasks digest' commands",
+      "Event-asset briefs now capture promotion formats (lobby banner, website sharing images, organic social, Heartcore banner, Marketo email, email signature, HRCI newsletter, Splash, Trendemon)",
+      "Collection-aware asset search with hard gates (ERG logos, anniversaries, and self-serve collections no longer cross-contaminate results)",
+      "HR product-module tagging in the asset library for module-specific search",
+      "'Show More Options' button on asset delivery for additional results",
+      "Persistent data via Railway volume — permissions, profiles, analytics, and catalog survive deploys",
+      "Admin permission commands now work in DMs (no channel scope needed)",
+      "Slide template routing with auto-sent visual guide",
+      "Webinar/event requests route to Figma Buzz templates first; brief reserved for genuinely custom work",
+      "URL preview unfurls suppressed on bot messages",
+      "Conversational tone — reduced over-bolding in responses"
+    ]
   }
 ]

@@ -406,10 +406,14 @@ function saveAnalytics() {
 }
 
 function trackEvent(type, userId, data = {}) {
+  // Auto-attach the user's serviced regions (set during onboarding) so we can
+  // see where requests originate without changing every call site.
+  const regions = userProfiles[userId]?.regions || [];
   analyticsData.events.push({
     type,
     userId,
     timestamp: new Date().toISOString(),
+    regions,
     ...data,
   });
   // Keep last 10,000 events max
@@ -444,6 +448,12 @@ function getAnalyticsSummary(days = 30) {
   const byTeam = {};
   recent.filter((e) => e.team).forEach((e) => { byTeam[e.team] = (byTeam[e.team] || 0) + 1; });
 
+  // Count by region — an event can span multiple regions, so count each
+  const byRegion = {};
+  recent.forEach((e) => {
+    (e.regions || []).forEach((r) => { byRegion[r] = (byRegion[r] || 0) + 1; });
+  });
+
   // Assets delivered
   const assetsDelivered = recent.filter((e) => e.type === "asset_delivered").length;
   const filesAttached = recent.filter((e) => e.type === "file_attached").length;
@@ -451,7 +461,7 @@ function getAnalyticsSummary(days = 30) {
   // Rejections
   const rejections = recent.filter((e) => e.type === "request_rejected").length;
 
-  return { total: recent.length, byType, topUsers, byAssetType, byTeam, assetsDelivered, filesAttached, rejections, days };
+  return { total: recent.length, byType, topUsers, byAssetType, byTeam, byRegion, assetsDelivered, filesAttached, rejections, days };
 }
 
 async function postAnalytics(text) {
@@ -496,7 +506,7 @@ function buildOnboardingBlocks() {
   return [
     {
       type: "section",
-      text: { type: "mrkdwn", text: `:wave: *Welcome to BrandBot!*\n\nI'm the Brand Services intake advisor for HiBob. Before we get started, I need to know which team you're on — this helps me route your requests and track analytics.\n\nSelect your team below and hit *Done*.` },
+      text: { type: "mrkdwn", text: `:wave: *Welcome to BrandBot!*\n\nI'm the Brand Services intake advisor for HiBob. Before we get started, I need a couple quick details — this helps me route your requests and track where they're coming from.\n\nFill these in and hit *Done*.` },
     },
     { type: "divider" },
     {
@@ -507,6 +517,15 @@ function buildOnboardingBlocks() {
         options: null, // TEAM_OPTIONS injected at runtime
       },
     },
+    {
+      type: "input", block_id: "onboard_region_block",
+      label: { type: "plain_text", text: "Which region(s) do you service?" },
+      element: {
+        type: "multi_static_select", action_id: "onboard_region_input",
+        placeholder: { type: "plain_text", text: "Select all that apply" },
+        options: null, // REGION_OPTIONS injected at runtime
+      },
+    },
   ];
 }
 
@@ -514,6 +533,8 @@ async function showOnboarding(userId, triggerId, client) {
   const blocks = buildOnboardingBlocks();
   const teamBlock = blocks.find(b => b.block_id === "onboard_team_block");
   if (teamBlock) teamBlock.element.options = TEAM_OPTIONS;
+  const regionBlock = blocks.find(b => b.block_id === "onboard_region_block");
+  if (regionBlock) regionBlock.element.options = REGION_OPTIONS;
 
   await client.views.open({
     trigger_id: triggerId,
@@ -755,37 +776,43 @@ app.view("onboarding_submit", async ({ ack, view, body, client }) => {
   const userId = body.user.id;
   const vals = view.state.values;
   const team = vals.onboard_team_block.onboard_team_input.selected_option;
+  const regionSelections = vals.onboard_region_block?.onboard_region_input?.selected_options || [];
+  const regions = regionSelections.map(o => o.text.text);
 
   setUserTeam(userId, team.text.text);
 
-  // Mark onboarding complete
+  // Mark onboarding complete + store regions
   if (!userProfiles[userId]) userProfiles[userId] = {};
   userProfiles[userId].onboarded_at = new Date().toISOString();
+  userProfiles[userId].regions = regions;
   saveUserProfiles();
 
   await ack();
+
+  const regionText = regions.length ? regions.join(", ") : "None selected";
 
   // Send intro message
   await client.chat.postMessage({
     channel: userId,
     text: [
       `:white_check_mark: You're all set! Team: *${team.text.text}*`,
+      `Region(s): ${regionText}`,
       ``,
       `Here's what I can help you with:`,
       ``,
-      `*:art: Request creative work* — Tell me what you need (a banner, deck, one-pager, video, illustration) and I'll route it to the right place.`,
-      `*:mag: Find brand assets* — Ask for illustrations, icons, logos, or shapes from our library and I'll send them to you.`,
-      `*:book: Brand questions* — Colors, fonts, voice, logo usage — I know it all.`,
-      `*:clipboard: Check request status* — Type \`my requests\` to see where your submissions stand.`,
-      `*:bar_chart: Your analytics* — Type \`my analytics\` for a personal activity summary.`,
+      `:art: *Request creative work* — Tell me what you need (a banner, deck, one-pager, video, illustration) and I'll route it to the right place.`,
+      `:mag: *Find brand assets* — Ask for illustrations, icons, logos, or shapes from our library and I'll send them to you.`,
+      `:book: *Brand questions* — Colors, fonts, voice, logo usage — I know it all.`,
+      `:clipboard: *Check request status* — Type \`my requests\` to see where your submissions stand.`,
+      `:bar_chart: *Your analytics* — Type \`my analytics\` for a personal activity summary.`,
       ``,
-      `You can also update your team anytime with \`set team [name]\`.`,
+      `You can update your team anytime with \`set team [name]\` or your regions with \`set regions [list]\`.`,
       ``,
       `Go ahead — tell me what you need!`,
     ].join("\n"),
   });
 
-  console.log(`[ONBOARD] User ${userId} onboarded: team=${team.text.text}`);
+  console.log(`[ONBOARD] User ${userId} onboarded: team=${team.text.text}, regions=${regions.join("|") || "none"}`);
 });
 
 // ────────────────────────────────────────────
@@ -1262,8 +1289,8 @@ Typical outputs: social posts, paid ads, meta images for hibob.com, website bann
 1–2 page documents for features, modules, partnerships, or case studies.
 First turn → \`clarify\`: ask "Is the messaging for this new, or already approved?"
 - *Messaging already approved* → \`show_form\`, \`form_type: "brief"\`. Straightforward production work.
-- *Messaging is new* → this is NOT a decline. New messaging means the brief should still go through, but it may involve a strategic review step. Route to \`show_form_plus_booking\` with \`form_type: "brief"\` — submit the brief AND book a scoping call so messaging can be aligned. Frame it positively: "Since the messaging is new, let's get it scoped properly — submit a brief with the details and book a quick call so we can align on positioning before design."
-NEVER \`decline\` a one-pager just because the messaging is new. New messaging is a reason for more scoping, not rejection.
+- *Messaging is new* → this is NOT a decline. New or unapproved messaging should go through a brand review first so positioning can be validated before design begins. Route to \`show_form\` with \`form_type: "review"\` — the Review Request captures the messaging for brand review. Frame it positively: "Since the messaging is new, let's run it through a quick brand review first to make sure the positioning is aligned — go ahead and submit a review request below, and once the messaging is approved we'll move into design."
+NEVER \`decline\` a one-pager just because the messaging is new. New messaging is a reason for review, not rejection.
 
 ### Decks and Presentations
 Google Slides for internal or external use.
@@ -1310,6 +1337,17 @@ Ask ONE question at a time, in this order:
 You don't need all 5 — but you MUST fully qualify before declining. Specifically:
 - NEVER \`decline\` an internal video until you've asked whether it's tied to a specific company-wide event (with a date/audience) OR is passive/evergreen. Asking "internal or external?" alone is NOT enough to decline. If they say "internal," your NEXT turn must ask the event-vs-passive follow-up (question 3) with \`next_step: "clarify"\` — do not decline yet.
 - Only after they confirm it's passive/evergreen AND not tied to an event → \`next_step: "decline"\`.
+- Words like "onboarding," "training," or "internal" are NOT automatic declines. An onboarding video could be tied to a major company kickoff event. You must ASK before assuming it's passive.
+
+WORKED EXAMPLE — internal video (follow this turn-by-turn):
+> User: "I need an internal video for onboarding"
+> You (next_step=clarify): "Happy to help! Is this onboarding video tied to a specific company-wide event with a date and audience — like a kickoff or summit — or is it more of an evergreen asset that new hires watch anytime?"
+> User: "evergreen, new hires watch it anytime"
+> You (next_step=decline): "Got it — since this is an evergreen onboarding asset that isn't tied to a specific event, it's not something Brand can take on right now. We focus on event-driven and external-facing work. Happy to help with anything else!"
+
+If instead the user had said "it's for our annual company kickoff next month" → that's a major event → next_step=show_form_plus_booking.
+
+The point: you ask the event-vs-evergreen question and WAIT for the answer. Never decline on the first turn.
 
 Once qualified, route:
 - Small edit (subtitles, trimming, light touch) → \`next_step: "show_form"\`, \`form_type: "brief"\`.
@@ -1506,7 +1544,7 @@ Buttons and booking links are injected automatically by the system based on your
 You are writing for Slack, NOT Markdown. Follow these rules strictly:
 - HEADERS: NEVER use Markdown headers (# ## ### etc.). Slack does not render them. Use *bold text* on its own line instead.
 - LINKS: Use Slack format \`<https://example.com|Link Text>\` — NEVER use Markdown format \`[text](url)\`.
-- BOLD: Use \`*bold*\` (single asterisks). NEVER use double asterisks \`**bold**\` — that is Markdown and will render as literal asterisks in Slack.
+- BOLD: Use \`*bold*\` (single asterisks). NEVER use double asterisks \`**bold**\` — that is Markdown and will render as literal asterisks in Slack. Use bold SPARINGLY — only for a key term or two, never for entire sentences or whole messages. Most messages should have NO bold at all. Write in a natural, conversational tone, not a formatted announcement.
 - ITALIC: Use \`_italic_\` (underscores).
 - BULLET POINTS: Use \`•\` (the bullet character) not \`-\` (dashes). Example: \`• First item\` not \`- First item\`.
 - EMOJI: Use standard Slack emoji codes like \`:warning:\`, \`:white_check_mark:\`, \`:memo:\`, \`:art:\`, \`:rocket:\`. Do NOT invent emoji codes. If unsure, skip the emoji.
@@ -2395,6 +2433,17 @@ const TEAM_OPTIONS = [
   { text: { type: "plain_text", text: "Other" }, value: "other" },
 ];
 
+const REGION_OPTIONS = [
+  { text: { type: "plain_text", text: "Global" }, value: "global" },
+  { text: { type: "plain_text", text: "UKI" }, value: "uki" },
+  { text: { type: "plain_text", text: "DACH" }, value: "dach" },
+  { text: { type: "plain_text", text: "Nordics" }, value: "nordics" },
+  { text: { type: "plain_text", text: "Benelux & Eurowest" }, value: "benelux_eurowest" },
+  { text: { type: "plain_text", text: "IL/CEE" }, value: "il_cee" },
+  { text: { type: "plain_text", text: "APJ" }, value: "apj" },
+  { text: { type: "plain_text", text: "AMER" }, value: "amer" },
+];
+
 const REQUEST_TYPE_OPTIONS = [
   { text: { type: "plain_text", text: "Quarterly planning" }, value: "quarterly_planning" },
   { text: { type: "plain_text", text: "Ad-hoc request" }, value: "ad_hoc" },
@@ -2524,6 +2573,33 @@ app.view("brief_step1", async ({ ack, view, body, client }) => {
   const sharedBlocks = forms.buildSharedBlocks();
   const assetBlocks = forms.getAssetBlocks(assetType);
 
+  // For event assets, add a promotion-channels multi-select so Brand knows which
+  // formats/sizes are needed for promotion.
+  const EVENT_ASSET_TYPES = ["event_tier1", "event_and_physical_assets", "artwork_event_assets"];
+  const eventPromoBlocks = EVENT_ASSET_TYPES.includes(assetType) ? [
+    {
+      type: "input", block_id: "event_promo_block", optional: true,
+      label: { type: "plain_text", text: "How will you promote this event? (select all that apply)" },
+      element: {
+        type: "multi_static_select", action_id: "event_promo_input",
+        placeholder: { type: "plain_text", text: "Select promotion formats" },
+        options: [
+          { text: { type: "plain_text", text: "Lobby banner 1200x627" }, value: "lobby_banner_1200x627" },
+          { text: { type: "plain_text", text: "Website sharing image 1200x627 (No CTA or Date)" }, value: "web_share_no_cta" },
+          { text: { type: "plain_text", text: "Website sharing image 1200x627 (With CTA or Date)" }, value: "web_share_with_cta" },
+          { text: { type: "plain_text", text: "Website sharing image (On-demand) 1200x627" }, value: "web_share_ondemand" },
+          { text: { type: "plain_text", text: "Organic social 1280x1280" }, value: "organic_social_1280" },
+          { text: { type: "plain_text", text: "Heartcore Events section banner 1440x640 (No CTA or Date)" }, value: "heartcore_1440x640" },
+          { text: { type: "plain_text", text: "Marketo Email banner 600x250 (No CTA, logo or Date)" }, value: "marketo_email_600x250" },
+          { text: { type: "plain_text", text: "HiBob Email signature 600x150" }, value: "email_sig_600x150" },
+          { text: { type: "plain_text", text: "HRCI Newsletter 340x420 (No CTA or Date)" }, value: "hrci_340x420" },
+          { text: { type: "plain_text", text: "Splash" }, value: "splash" },
+          { text: { type: "plain_text", text: "Trendemon" }, value: "trendemon" },
+        ],
+      },
+    },
+  ] : [];
+
   const step2Blocks = [
     {
       type: "section",
@@ -2532,6 +2608,7 @@ app.view("brief_step1", async ({ ack, view, body, client }) => {
     { type: "divider" },
     ...sharedBlocks,
     ...assetBlocks,
+    ...eventPromoBlocks,
   ];
 
   await ack({
@@ -2578,6 +2655,9 @@ app.view("brief_step2", async ({ ack, view, body, client }) => {
   // Extract asset-specific fields
   const assetSpecific = forms.extractAssetFields(step1.assetType, vals);
   const assetLabel = forms.ASSET_TYPE_LABELS[step1.assetType] || step1.assetType;
+
+  // Extract event promotion formats (only present for event asset types)
+  const eventPromo = get("event_promo_block", "event_promo_input");
 
   try {
     if (!ASANA_PAT || !ASANA_PROJECT_GID) throw new Error("ASANA_PAT or ASANA_PROJECT_GID not configured");
@@ -2628,6 +2708,7 @@ app.view("brief_step2", async ({ ack, view, body, client }) => {
       + `\n`
       + `<strong>${esc(assetLabel)} Details</strong>\n`
       + assetSpecificLines.map(l => esc(l)).join("\n") + "\n"
+      + (eventPromo ? `\n<strong>Promotion Formats Needed</strong>\n${esc(eventPromo)}\n` : "")
       + (pending.toolCall?.summary ? `\n<strong>Bot context:</strong> ${esc(pending.toolCall.summary)}\n` : "")
       + `</body>`;
 
@@ -3311,6 +3392,77 @@ async function queryAsanaTasks({ filter, userId }) {
   }
 }
 
+// ────────────────────────────────────────────
+// Daily task digest — tasks due this week + subtasks, today highlighted
+// ────────────────────────────────────────────
+async function buildDailyTaskDigest() {
+  if (!ASANA_PAT || !ASANA_PROJECT_GID) return "Asana is not configured.";
+
+  const today = new Date().toISOString().split("T")[0];
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const result = await asanaRequest(
+    `/tasks?project=${ASANA_PROJECT_GID}&completed_since=now&opt_fields=name,assignee.name,due_on,completed,permalink_url,num_subtasks&limit=100`
+  );
+  const topTasks = (result.data || []).filter((t) => !t.completed);
+
+  const dueToday = [];
+  const dueThisWeek = [];
+
+  for (const t of topTasks) {
+    let subtasks = [];
+    if (t.num_subtasks > 0) {
+      try {
+        const subRes = await asanaRequest(`/tasks/${t.gid}/subtasks?opt_fields=name,assignee.name,due_on,completed,permalink_url`);
+        subtasks = (subRes.data || []).filter((s) => !s.completed);
+      } catch (e) {
+        console.error(`[DIGEST] Subtask fetch failed for ${t.gid}: ${e.message}`);
+      }
+    }
+
+    const inWindow = (d) => d && d >= today && d <= nextWeek;
+    const taskInWindow = inWindow(t.due_on);
+    const subsInWindow = subtasks.filter((s) => inWindow(s.due_on));
+
+    if (taskInWindow || subsInWindow.length) {
+      const entry = { task: t, subs: subtasks };
+      dueThisWeek.push(entry);
+      if (t.due_on === today || subsInWindow.some((s) => s.due_on === today)) {
+        dueToday.push(entry);
+      }
+    }
+  }
+
+  if (!dueThisWeek.length) return `:calendar: *Daily Task Digest \u2014 ${today}*\n\nNo tasks due this week. :tada:`;
+
+  const fmtTask = (t, isSub = false) => {
+    const assignee = t.assignee?.name || "Unassigned";
+    const due = t.due_on || "no date";
+    const todayFlag = t.due_on === today ? " :red_circle: *DUE TODAY*" : "";
+    const bullet = isSub ? "    \u25e6" : "\u2022";
+    const url = t.permalink_url ? ` <${t.permalink_url}|view>` : "";
+    return `${bullet} ${t.name} \u2014 _${assignee}_ \u2014 due ${due}${todayFlag}${url}`;
+  };
+
+  const lines = [`:calendar: *Daily Task Digest \u2014 ${today}*`];
+
+  if (dueToday.length) {
+    lines.push(``, `:red_circle: *Due TODAY (${dueToday.length})*`);
+    for (const { task, subs } of dueToday) {
+      if (task.due_on === today) lines.push(fmtTask(task));
+      subs.filter((s) => s.due_on === today).forEach((s) => lines.push(fmtTask(s, true)));
+    }
+  }
+
+  lines.push(``, `:date: *Due this week (${dueThisWeek.length} task${dueThisWeek.length > 1 ? "s" : ""})*`);
+  for (const { task, subs } of dueThisWeek) {
+    lines.push(fmtTask(task));
+    subs.forEach((s) => lines.push(fmtTask(s, true)));
+  }
+
+  return lines.join("\n");
+}
+
 const ADMIN_COMMANDS = {
   // ── Asana queries ──
   "whats due this week": async (userId) => queryAsanaTasks({ filter: "due_this_week", userId }),
@@ -3346,6 +3498,10 @@ const ADMIN_COMMANDS = {
     if (Object.keys(s.byTeam).length) {
       lines.push(``, `*By team:*`);
       lines.push(...Object.entries(s.byTeam).sort((a, b) => b[1] - a[1]).map(([k, v]) => `• ${k}: ${v}`));
+    }
+    if (Object.keys(s.byRegion).length) {
+      lines.push(``, `*By region:*`);
+      lines.push(...Object.entries(s.byRegion).sort((a, b) => b[1] - a[1]).map(([k, v]) => `• ${k}: ${v}`));
     }
     lines.push(``, `Assets delivered: ${s.assetsDelivered} | Files attached: ${s.filesAttached} | Rejected: ${s.rejections}`);
     return lines.join("\n");
@@ -3806,6 +3962,20 @@ const ADMIN_COMMANDS = {
     }
     return digest;
   },
+  "daily digest": async () => {
+    const digest = await buildDailyTaskDigest();
+    if (ANALYTICS_CHANNEL_ID) {
+      try {
+        await app.client.chat.postMessage({ channel: ANALYTICS_CHANNEL_ID, text: digest, unfurl_links: false, unfurl_media: false });
+        return `:white_check_mark: Daily task digest posted to <#${ANALYTICS_CHANNEL_ID}>.`;
+      } catch (err) {
+        return `Digest built but couldn't post to channel: ${err.message}\n\n${digest}`;
+      }
+    }
+    return digest;
+  },
+  "tasks digest": async () => buildDailyTaskDigest(),
+  "task digest": async () => buildDailyTaskDigest(),
 };
 
 // ────────────────────────────────────────────
@@ -3995,6 +4165,35 @@ app.message(async ({ message, say: _say, client }) => {
     if (textLower === "my team") {
       const team = getUserTeam(userId);
       await say(team ? `Your team is set to *${team}*. Use \`set team [name]\` to change it.` : `You haven't set a team yet. Use \`set team Performance Marketing\` (or any team name) to set it.`);
+      return;
+    }
+
+    // "set regions [list]" — available to ALL users
+    if (textLower.startsWith("set regions ") || textLower.startsWith("set region ")) {
+      const raw = text.replace(/^set regions?\s*/i, "").trim();
+      if (!raw) { await say("Usage: `set regions UKI, DACH` (options: Global, UKI, DACH, Nordics, Benelux & Eurowest, IL/CEE, APJ, AMER)"); return; }
+      const validRegions = REGION_OPTIONS.map(r => r.text.text);
+      const requested = raw.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+      const matched = [];
+      const unknown = [];
+      for (const req of requested) {
+        const m = validRegions.find(v => v.toLowerCase() === req.toLowerCase());
+        if (m) matched.push(m); else unknown.push(req);
+      }
+      if (!matched.length) { await say(`No valid regions recognized. Options: ${validRegions.join(", ")}`); return; }
+      if (!userProfiles[userId]) userProfiles[userId] = {};
+      userProfiles[userId].regions = matched;
+      saveUserProfiles();
+      let msg = `:white_check_mark: Your region(s) set to: ${matched.join(", ")}.`;
+      if (unknown.length) msg += `\n(Didn't recognize: ${unknown.join(", ")} — valid options: ${validRegions.join(", ")})`;
+      await say(msg);
+      return;
+    }
+
+    // "my regions" — show current regions
+    if (textLower === "my regions" || textLower === "my region") {
+      const regions = userProfiles[userId]?.regions || [];
+      await say(regions.length ? `You service: ${regions.join(", ")}. Use \`set regions [list]\` to change.` : `You haven't set any regions yet. Use \`set regions UKI, DACH\` to set them.`);
       return;
     }
 
@@ -4266,6 +4465,40 @@ function scheduleWeeklyDigest() {
   console.log("Weekly digest scheduled: Mondays at 9 AM");
 }
 
+function scheduleDailyTaskDigest() {
+  // Post a task digest to #brandbot-ops every weekday morning
+  const DIGEST_HOUR = 8; // 8 AM
+  let lastDigestDate = null;
+
+  setInterval(async () => {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+
+    if (isWeekday && now.getHours() === DIGEST_HOUR && lastDigestDate !== todayStr) {
+      lastDigestDate = todayStr;
+      console.log("[DAILY DIGEST] Running daily task digest...");
+      try {
+        const digest = await buildDailyTaskDigest();
+        if (ANALYTICS_CHANNEL_ID) {
+          await app.client.chat.postMessage({
+            channel: ANALYTICS_CHANNEL_ID,
+            text: digest,
+            unfurl_links: false,
+            unfurl_media: false,
+          });
+          console.log("[DAILY DIGEST] Posted to #brandbot-ops");
+        }
+      } catch (err) {
+        console.error("[DAILY DIGEST] Failed:", err.message);
+      }
+    }
+  }, 60 * 60 * 1000); // Check every hour
+
+  console.log("Daily task digest scheduled: weekdays at 8 AM");
+}
+
 // ────────────────────────────────────────────
 // Start
 // ────────────────────────────────────────────
@@ -4275,4 +4508,5 @@ function scheduleWeeklyDigest() {
   if (!ASANA_PAT) console.warn("⚠ ASANA_PAT not set — task creation will fail.");
   if (!ASANA_PROJECT_GID) console.warn("⚠ ASANA_PROJECT_GID not set — task creation will fail.");
   scheduleWeeklyDigest();
+  scheduleDailyTaskDigest();
 })();
