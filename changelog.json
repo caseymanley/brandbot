@@ -89,7 +89,9 @@
       "Slide template routing with auto-sent visual guide",
       "Webinar/event requests route to Figma Buzz templates first; brief reserved for genuinely custom work",
       "URL preview unfurls suppressed on bot messages",
-      "Conversational tone — reduced over-bolding in responses"
+      "Conversational tone — reduced over-bolding in responses",
+      "Onboarding reset command for admins ('debug onboarding' / 'reset onboarding')",
+      "A few hidden easter eggs for the curious :)"
     ]
   }
 ]

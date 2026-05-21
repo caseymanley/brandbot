@@ -2146,6 +2146,85 @@ function logRouting(userId, toolCall) {
 }
 
 // ────────────────────────────────────────────
+// Easter eggs — hidden delights for the curious. Returns a string or array of
+// strings (sent sequentially) when triggered, else null. Triggers are specific
+// enough that they never fire on a real brand request.
+// ────────────────────────────────────────────
+const eggGameState = {}; // userId -> { type, secret, guesses }
+
+function checkEasterEggs(text, userId) {
+  const t = text.toLowerCase().trim();
+
+  // 1. The cake (Portal)
+  if (t === "i want cake" || t === "can i have a cake" || t === "request a cake" || t === "i'd like to request a cake" || t === "the cake is a lie") {
+    return [
+      ":cake: _This was a triumph._",
+      "_I'm making a note here: huge success._\n\nThe cake, however, is a lie. But your brand assets are very real — what can I actually get you? :wink:",
+    ];
+  }
+
+  // 2. Star Fox
+  if (t === "do a barrel roll") {
+    return ":dizzy: _whirls 360°_ :rocket:\n\nNice. Peppy would be proud. Now, back to brand work — what do you need?";
+  }
+
+  // 3. Contra code
+  if (t.startsWith("up up down down")) {
+    return ":video_game: *30 extra lives granted.* Sadly they're brand assets, not lives. But unlimited revisions? (Kidding. Please respect the SLA. :sweat_smile:)";
+  }
+
+  // 4. Monty Python
+  if (t === "what is your quest" || t === "what is your quest?") {
+    return ":crossed_swords: _I seek the Holy Grail... of on-brand creative._\n\nWhat is *your* quest? (A banner? An illustration? A deck?)";
+  }
+
+  // 5. Star Wars
+  if (t.includes("i am your father")) {
+    return ":milky_way: _Noooooooooo._\n\nSearch your feelings — you know it to be a Creative Brief. What are we making?";
+  }
+
+  // 6. Star Trek TNG
+  if (t === "tea, earl grey, hot" || t === "tea earl grey hot") {
+    return ":tea: _replicator hums_\n\nDispensing one (1) Earl Grey, hot. Engage. Now — what brand asset can I materialize for you?";
+  }
+
+  // 7. 2001: A Space Odyssey
+  if (t.includes("open the pod bay doors")) {
+    return "_I'm sorry, Dave. I'm afraid I can't do that._\n\n...kidding. I'll open any door you need — except ones that bypass the SLA. What's the request? :milky_way:";
+  }
+
+  // 8. Number-guessing game (also a WarGames nod)
+  if (t === "play a game" || t === "let's play a game" || t === "lets play a game" || t === "shall we play a game") {
+    eggGameState[userId] = { type: "guess", secret: Math.floor(Math.random() * 10) + 1, guesses: 0 };
+    return ":game_die: _Shall we play a game?_\n\nI'm thinking of a number between *1 and 10*. Type your guess. (Type `quit` to stop.)";
+  }
+
+  const game = eggGameState[userId];
+  if (game && game.type === "guess") {
+    if (t === "quit" || t === "stop" || t === "nevermind" || t === "never mind") {
+      delete eggGameState[userId];
+      return `No worries — the number was *${game.secret}*. Back to brand work whenever you're ready!`;
+    }
+    const guess = parseInt(t, 10);
+    if (!isNaN(guess) && guess >= 1 && guess <= 10) {
+      game.guesses++;
+      if (guess === game.secret) {
+        const tries = game.guesses;
+        delete eggGameState[userId];
+        return `:tada: *Got it in ${tries} ${tries === 1 ? "try" : "tries"}!* The number was *${game.secret}*.\n\nThat's my whole bag of tricks. Now — need any brand assets? :smile:`;
+      }
+      return guess < game.secret
+        ? `Higher. :arrow_up: (guess #${game.guesses})`
+        : `Lower. :arrow_down: (guess #${game.guesses})`;
+    }
+    delete eggGameState[userId];
+    return null;
+  }
+
+  return null;
+}
+
+// ────────────────────────────────────────────
 // Main handler
 // ────────────────────────────────────────────
 async function handleIntake({ userId, text, say, channelId, client }) {
@@ -3313,6 +3392,17 @@ const DEBUG_COMMANDS = {
     delete sessions[userId];
     return "Your session has been reset. Start a new conversation anytime.";
   },
+  "debug onboarding": async (userId) => {
+    // Clear onboarding state so the Get Started flow triggers again on next DM
+    if (userProfiles[userId]) {
+      delete userProfiles[userId].onboarded_at;
+      delete userProfiles[userId].team;
+      delete userProfiles[userId].regions;
+      saveUserProfiles();
+    }
+    delete sessions[userId];
+    return "Onboarding reset — send me any message and the Get Started flow (with team + region selection) will appear again.";
+  },
   "debug catalog": async () => {
     if (!assetCatalog.length) return "No assets loaded. Run `rescan assets` to scan the Drive folder.";
     const byCat = {};
@@ -4005,6 +4095,20 @@ app.message(async ({ message, say: _say, client }) => {
     const textLower = text.toLowerCase();
     const userId = message.user;
 
+    // ── Easter eggs (DM only) — check before anything else ──
+    if (isIM && text) {
+      const egg = checkEasterEggs(text, userId);
+      if (egg) {
+        const messages = Array.isArray(egg) ? egg : [egg];
+        for (const m of messages) {
+          await say(m);
+          if (messages.length > 1) await new Promise((r) => setTimeout(r, 900));
+        }
+        console.log(`[EGG] Triggered by ${userId}: "${text.slice(0, 40)}"`);
+        return;
+      }
+    }
+
     // ── File upload handler (DM only) ──
     if (isIM && message.files && message.files.length > 0) {
       const pendingUpload = getPendingFileUpload(userId);
@@ -4064,6 +4168,13 @@ app.message(async ({ message, say: _say, client }) => {
         return;
       }
       // No pending upload — treat as a normal message (the LLM can't process files yet)
+    }
+
+    // "reset onboarding" — admin convenience alias
+    if ((textLower === "reset onboarding" || textLower === "debug onboarding") && isAdmin(userId)) {
+      const result = await DEBUG_COMMANDS["debug onboarding"](userId);
+      await say(result);
+      return;
     }
 
     // Debug commands (available to admins)
