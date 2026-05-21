@@ -1301,7 +1301,11 @@ While qualifying, use route \`needs_clarification\`. Once you have the answers:
 NEVER show a button before qualifying. But once qualified as strategic, the brief + booking call IS the scoping mechanism — route to it.
 
 ### Video — Qualifying Questions (MANDATORY)
-ANY video request — regardless of how clear it seems — MUST go through qualification before routing. When someone mentions a video, you MUST use route \`needs_clarification\` in the tool call until ALL qualifying questions are answered. Do NOT route to \`general_creative_services\` or any other form route until validation is complete.
+ANY video request — regardless of how clear it seems — MUST go through qualification before routing.
+
+**ABSOLUTE RULE: On the FIRST message of any video request, you MUST route to \`needs_clarification\` and ask a qualifying question. NEVER route to \`strategic_scoping\` or \`general_creative_services\` on the first turn of a video request, even if it sounds strategic. "I need a product launch video" → route \`needs_clarification\`, ask question 1. Do NOT route to a form yet.**
+
+**NEVER tell the user to "hit the buttons below" or "submit a brief" or "book a call" while you are still in the qualifying phase. If you are routing to \`needs_clarification\`, your message must ONLY contain your qualifying question — no mention of buttons, briefs, or booking links. The buttons do not exist yet, so promising them confuses the user.**
 
 Ask ONE question at a time, in this order:
 1. What kind of edit? (light touch like subtitles/trimming, or something more involved like a highlight reel, promo, or concept piece?)
@@ -1310,9 +1314,12 @@ Ask ONE question at a time, in this order:
 4. What's the timeframe? When does this need to be live?
 5. What's the business objective? (driving revenue, supporting a launch, executive visibility?)
 
-You do NOT need to ask all 5 if earlier answers make it clear. For example, if they say "subtitles on a webinar" — that's a small edit, route directly. But for anything beyond small edits, you need answers to at least questions 1-3 before showing a button.
+You do NOT need to ask all 5 — but you MUST get answers to at least questions 1 AND 2 before routing to any form. Only after you've asked and received answers should you route:
+- Small edit (subtitles, trimming) → \`general_creative_services\`, the brief button appears.
+- Strategic/concept video (external or major event) → \`strategic_scoping\` with \`strategic_escalation: true\`. NOW you can tell them about the brief + booking call, because the buttons will appear.
+- Internal + passive (training, evergreen) → decline, no form.
 
-For video/animation concept work, NEVER route to a form — tell them to contact Brand leadership directly.
+The flow is ALWAYS: qualify first (needs_clarification), THEN route (form). Never skip to the form on turn one.
 
 ### ROUTING DISCIPLINE
 For ANY request, follow these rules:
@@ -2132,7 +2139,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   }
 
   const { text: rawReply, toolCall, illustrationSearch } = await getResponse(session);
-  const reply = sanitizeForSlack(rawReply);
+  let reply = sanitizeForSlack(rawReply);
   logRouting(userId, toolCall);
 
   // ── Remove thinking indicator ──
@@ -2362,6 +2369,19 @@ async function handleIntake({ userId, text, say, channelId, client }) {
 
   const shouldShowButton = !!(toolHasForm || sessionHasForm) && userCanSubmit;
   const formType = isCalendarEligible ? "brief" : (FORM_ROUTES[toolCall?.route] || session.formType || "brief");
+
+  // SAFETY NET: If we're suppressing the button (video/one-pager not yet qualified) but the LLM's
+  // reply promises buttons, the message is misleading. Replace it with a clean qualifying nudge.
+  const gateSuppressing = (isVideoRequest && !session.videoValidated) || (isOnePager && !session.onePagerValidated);
+  const replyPromisesButton = /hit the button|button below|submit (a |your )?(creative )?brief|book a (briefing )?call|buttons below/i.test(reply);
+  if (gateSuppressing && !shouldShowButton && replyPromisesButton) {
+    console.log(`[DEBUG] Reply promised a button but gate is suppressing — replacing with qualifying nudge`);
+    if (isVideoRequest) {
+      reply = "Happy to help with your video! First, a couple quick questions so I route this correctly: is this an internal or external-facing video, and is it tied to a specific event or launch with a date?";
+    } else if (isOnePager) {
+      reply = "Happy to help with your one-pager! Quick question first: is the messaging and positioning already approved, or is this new messaging? That determines whether it needs a strategic review before design.";
+    }
+  }
 
   console.log(`[DEBUG] showButton=${shouldShowButton} formType=${formType} briefEarned=${briefEarned} turns=${userTurnCount} templateOffered=${!!session.templateOffered} tier=${userTier} rejection=${isRejection}`);
 
