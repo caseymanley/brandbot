@@ -1289,15 +1289,16 @@ If ineligible → politely decline and explain specifically why.
 ### Video & Animation Initiatives
 Major concept work: product launch animations, large-scale testimonials, brand partnership videos, new video formats.
 
-*CRITICAL: Do NOT route to a form. Do NOT show a submit button. NEVER route to \`general_creative_services\` or \`strategic_scoping\` for animation/concept work.*
-
-But before telling them it needs leadership scoping, you MUST STILL ask the qualifying questions:
+You MUST ask the qualifying questions BEFORE routing — one at a time:
 1. Is this external-facing or internal?
 2. What's the business objective? (revenue, launch, executive visibility?)
 3. What's the timeframe?
 
-If it's internal + not tied to a major event → decline (not eligible for Brand support).
-If it's external or tied to a major initiative → THEN tell them: "This type of work requires a scoping conversation with Brand leadership before we can kick things off." and share the booking link.
+While qualifying, use route \`needs_clarification\`. Once you have the answers:
+- If it's internal + not tied to a major event → decline (not eligible for Brand support). Do NOT route to a form.
+- If it's external or tied to a major initiative → route to \`strategic_scoping\` with \`strategic_escalation: true\`. Tell them: "This is a big initiative, so you'll need to do two things: submit a Creative Brief with the details, and book a briefing call so we can scope it together with Brand leadership." The system will show both the brief button and the booking link.
+
+NEVER show a button before qualifying. But once qualified as strategic, the brief + booking call IS the scoping mechanism — route to it.
 
 ### Video — Qualifying Questions (MANDATORY)
 ANY video request — regardless of how clear it seems — MUST go through qualification before routing. When someone mentions a video, you MUST use route \`needs_clarification\` in the tool call until ALL qualifying questions are answered. Do NOT route to \`general_creative_services\` or any other form route until validation is complete.
@@ -1327,6 +1328,9 @@ For ANY request, follow these rules:
 \`strategic_scoping\` is for major initiatives requiring a scoping call — campaigns, program identities, feature launches, brand-new visual systems.
 
 NEVER use \`creative_review\` when someone needs NEW work. "I need a custom visual system for our campaign" = \`strategic_scoping\` with \`strategic_escalation: true\`, NOT \`creative_review\`. If the user isn't asking you to CHECK existing assets, it's not a review.
+
+### HANDLING DIRECT BRIEF REQUESTS
+If someone says "I want to submit a creative brief" or "I want to submit a brief" with NO other context, don't just show a button blindly and don't leave them hanging. Ask ONE quick qualifying question to understand what they need: "Happy to help you submit a brief! Quick question first — what are you looking to create? (e.g., a one-pager, a custom graphic, a video, an event asset)" Once they answer, route appropriately — they may not even need a brief if it's a template or library item. If it IS genuine custom work, the button will appear after they've told you what it's for.
 
 ### Programs & Campaign Systems
 Multi-asset initiatives needing identity systems and campaign architecture: program identities, feature campaigns, major event campaigns, launch systems, internal program branding.
@@ -2161,29 +2165,20 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const assetType = toolCall?.asset_type || session.pendingAssetType || null;
   const isVideoRequest = VIDEO_ASSETS.includes(assetType);
 
+  // Count video qualifying turns for ALL video types
   if (isVideoRequest && !session.videoValidated) {
     session.pendingAssetType = assetType;
+    const videoTurnCount = (session.videoTurnCount || 0) + 1;
+    session.videoTurnCount = videoTurnCount;
 
-    // Video concept/animation NEVER gets a form button
-    if (assetType === "video_concept_or_animation") {
-      session.videoValidated = false;
-      console.log(`[DEBUG] Video/animation concept — button permanently blocked, needs leadership scoping`);
-    }
-    // For video edits: require at least 3 user turns (initial ask + 2 qualifying answers)
-    else {
-      const videoTurnCount = (session.videoTurnCount || 0) + 1;
-      session.videoTurnCount = videoTurnCount;
-
-      if (videoTurnCount >= 3) {
-        if (toolCall && FORM_ROUTES[toolCall.route]) {
-          session.videoValidated = true;
-          console.log(`[DEBUG] Video validated after ${videoTurnCount} turns (route: ${toolCall.route})`);
-        } else {
-          console.log(`[DEBUG] Video turn ${videoTurnCount} but not yet validated (route: ${toolCall?.route || "none"})`);
-        }
-      } else {
-        console.log(`[DEBUG] Video turn ${videoTurnCount}/3 — button suppressed until qualification complete`);
-      }
+    // Video requires at least 2 qualifying turns (initial ask + at least 1 answer about scope/audience).
+    // After qualification, the button is allowed — whether it's an edit (brief) or a
+    // strategic concept (brief + booking link). The scoping call IS the leadership review.
+    if (videoTurnCount >= 2 && toolCall && (FORM_ROUTES[toolCall.route] || toolCall.strategic_escalation)) {
+      session.videoValidated = true;
+      console.log(`[DEBUG] Video validated after ${videoTurnCount} turns (route: ${toolCall.route}, strategic: ${!!toolCall.strategic_escalation})`);
+    } else {
+      console.log(`[DEBUG] Video turn ${videoTurnCount} — button suppressed until qualification complete (route: ${toolCall?.route || "none"})`);
     }
   }
 
@@ -2225,6 +2220,13 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       session.lastToolCall = toolCall;
       console.log(`[DEBUG] Session flagged formType=${session.formType} (route: ${toolCall.route})`);
     }
+  }
+
+  // Strategic video concepts that have been qualified should also set formType
+  if (isVideoRequest && session.videoValidated && isCalendarEligible && !session.formType) {
+    session.formType = "brief";
+    session.lastToolCall = toolCall;
+    console.log(`[DEBUG] Strategic video validated — formType=brief + booking link`);
   }
 
   if (toolCall && toolCall.route === "needs_clarification") {
@@ -2319,13 +2321,18 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   }
 
   const toolHasForm = toolCall && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification"
-    && !(assetType === "video_concept_or_animation") // NEVER show button for animation concepts
-    && !(isVideoRequest && !session.videoValidated) // Video ALWAYS requires qualifying — no admin bypass
+    && !(isVideoRequest && !session.videoValidated) // Video ALWAYS requires qualifying first — applies to all users
     && !isLowConfidence
     && !isRejection
     && (!illustrationSearch || briefEarned) // Suppress brief during library search UNLESS brief was earned
     && briefEarned; // Must earn the brief through qualifying conversation
-  const sessionHasForm = session.formType && !toolCall && !isRejection && briefEarned;
+  // sessionHasForm covers cases where the form was validated on a prior turn (e.g. strategic video
+  // qualified, then the route comes through). Only applies when the current turn isn't itself
+  // routing to clarification (which clears formType) — prevents stale buttons on unrelated turns.
+  const currentTurnClarifies = toolCall && toolCall.route === "needs_clarification";
+  const sessionHasForm = session.formType && !isRejection && briefEarned
+    && !currentTurnClarifies
+    && !(isVideoRequest && !session.videoValidated);
 
   const shouldShowButton = !!(toolHasForm || sessionHasForm) && userCanSubmit;
   const formType = isCalendarEligible ? "brief" : (FORM_ROUTES[toolCall?.route] || session.formType || "brief");
