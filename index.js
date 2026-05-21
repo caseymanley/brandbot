@@ -844,7 +844,7 @@ function getSession(userId) {
   const now = Date.now();
   let s = sessions[userId];
   if (!s || now - s.lastActivity > SESSION_TTL_MS) {
-    s = { messages: [], lastActivity: now, formType: null, lastToolCall: null, videoValidated: false, videoTurnCount: 0, pendingAssetType: null, deliveredAssetIds: new Set() };
+    s = { messages: [], lastActivity: now, formType: null, lastToolCall: null, videoValidated: false, videoTurnCount: 0, onePagerValidated: false, onePagerTurnCount: 0, pendingAssetType: null, deliveredAssetIds: new Set() };
     sessions[userId] = s;
   }
   s.lastActivity = now;
@@ -2163,7 +2163,13 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   // The model keeps skipping needs_clarification, so we enforce it in code.
   const VIDEO_ASSETS = ["video_small_edit", "video_large_edit", "video_concept_or_animation"];
   const assetType = toolCall?.asset_type || session.pendingAssetType || null;
-  const isVideoRequest = VIDEO_ASSETS.includes(assetType);
+
+  // Detect video requests by keyword too — the LLM sometimes classifies "product launch video"
+  // as feature_launch/campaign, which would skip the video qualifying gate. Catch it here.
+  const routeIsBrief = (FORM_ROUTES[toolCall?.route] || session.formType) === "brief";
+  const recentUserText = session.messages.filter(m => m.role === "user").slice(-3).map(m => m.content).join(" ").toLowerCase();
+  const mentionsVideo = /\b(video|animation|animated|motion graphic|highlight reel|sizzle|testimonial video|promo video|launch video)\b/.test(recentUserText);
+  const isVideoRequest = VIDEO_ASSETS.includes(assetType) || (mentionsVideo && routeIsBrief);
 
   // Count video qualifying turns for ALL video types
   if (isVideoRequest && !session.videoValidated) {
@@ -2179,6 +2185,22 @@ async function handleIntake({ userId, text, say, channelId, client }) {
       console.log(`[DEBUG] Video validated after ${videoTurnCount} turns (route: ${toolCall.route}, strategic: ${!!toolCall.strategic_escalation})`);
     } else {
       console.log(`[DEBUG] Video turn ${videoTurnCount} — button suppressed until qualification complete (route: ${toolCall?.route || "none"})`);
+    }
+  }
+
+  // ── ONE-PAGER GATE ──
+  // One-pagers need the "is the messaging new or approved?" question answered first.
+  // If messaging is new, strategic review may be needed before design.
+  const isOnePager = assetType === "one_pager";
+  if (isOnePager && !session.onePagerValidated) {
+    const opTurnCount = (session.onePagerTurnCount || 0) + 1;
+    session.onePagerTurnCount = opTurnCount;
+    // Validated once they've had a qualifying exchange (2+ turns) — the messaging question
+    if (opTurnCount >= 2) {
+      session.onePagerValidated = true;
+      console.log(`[DEBUG] One-pager validated after ${opTurnCount} turns`);
+    } else {
+      console.log(`[DEBUG] One-pager turn ${opTurnCount} — button suppressed until messaging status confirmed`);
     }
   }
 
@@ -2304,7 +2326,9 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   } else if (session.briefEarned) {
     briefEarned = true; // Pre-earned (e.g., admin intake shortcut)
   } else if (isCalendarEligible) {
-    briefEarned = true; // Strategic initiatives earn the brief immediately — they need the scoping call
+    // Strategic initiatives earn the brief, BUT video and one-pager still need their
+    // specific qualifying question first (handled by dedicated gates below).
+    briefEarned = true;
     console.log(`[GATE] Brief auto-earned — strategic initiative (calendar-eligible)`);
   } else if (isTemplateEligible) {
     // Template-eligible: must have offered a template AND had 2+ turns
@@ -2322,6 +2346,7 @@ async function handleIntake({ userId, text, say, channelId, client }) {
 
   const toolHasForm = toolCall && FORM_ROUTES[toolCall.route] && toolCall.route !== "needs_clarification"
     && !(isVideoRequest && !session.videoValidated) // Video ALWAYS requires qualifying first — applies to all users
+    && !(isOnePager && !session.onePagerValidated) // One-pager needs messaging status confirmed first
     && !isLowConfidence
     && !isRejection
     && (!illustrationSearch || briefEarned) // Suppress brief during library search UNLESS brief was earned
@@ -2332,7 +2357,8 @@ async function handleIntake({ userId, text, say, channelId, client }) {
   const currentTurnClarifies = toolCall && toolCall.route === "needs_clarification";
   const sessionHasForm = session.formType && !isRejection && briefEarned
     && !currentTurnClarifies
-    && !(isVideoRequest && !session.videoValidated);
+    && !(isVideoRequest && !session.videoValidated)
+    && !(isOnePager && !session.onePagerValidated);
 
   const shouldShowButton = !!(toolHasForm || sessionHasForm) && userCanSubmit;
   const formType = isCalendarEligible ? "brief" : (FORM_ROUTES[toolCall?.route] || session.formType || "brief");
