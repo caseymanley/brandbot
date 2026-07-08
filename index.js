@@ -4,6 +4,8 @@ const path = require("path");
 const { App } = require("@slack/bolt");
 const OpenAI = require("openai");
 const forms = require("./forms");
+const review = require("./review");
+const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -34,7 +36,7 @@ if (DATA_DIR !== __dirname && !fs.existsSync(DATA_DIR)) {
 }
 
 // Seed all runtime data files on first boot
-["permissions.json", "user-profiles.json", "analytics.json", "assets.json", "agencies.json"].forEach(seedDataFile);
+["permissions.json", "user-profiles.json", "analytics.json", "assets.json", "agencies.json", "reviews.json"].forEach(seedDataFile);
 console.log(`[DATA] Data directory: ${DATA_DIR}`);
 
 const app = new App({
@@ -827,6 +829,278 @@ function loadChangelog() {
   }
 }
 loadChangelog();
+
+// ════════════════════════════════════════════
+// Brand Review — registry, certificate, delivery  (Feature: file intake + compliance)
+// ════════════════════════════════════════════
+// The REGISTRY RECORD is the source of truth we enforce against, not the score.
+// Every review (pass or fail) writes an immutable record with an ID; only a pass
+// mints a "Cleared for Live" certificate PDF. `verify BR-…` returns the record.
+const REVIEWS_FILE = path.resolve(DATA_DIR, "reviews.json");
+let reviewRegistry = { reviews: {} };
+
+function loadReviews() {
+  if (fs.existsSync(REVIEWS_FILE)) {
+    try {
+      reviewRegistry = JSON.parse(fs.readFileSync(REVIEWS_FILE, "utf8"));
+      if (!reviewRegistry.reviews) reviewRegistry.reviews = {};
+      console.log(`Review registry loaded: ${Object.keys(reviewRegistry.reviews).length} records`);
+    } catch { reviewRegistry = { reviews: {} }; }
+  }
+}
+loadReviews();
+
+function saveReviews() {
+  try { fs.writeFileSync(REVIEWS_FILE, JSON.stringify(reviewRegistry, null, 2)); }
+  catch (err) { console.error("[REVIEW] Save failed:", err.message); }
+}
+
+function generateCertId() {
+  const d = new Date();
+  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  let id;
+  do {
+    const rnd = Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, "0");
+    id = `BR-${ymd}-${rnd}`;
+  } while (reviewRegistry.reviews[id]);
+  return id;
+}
+
+function recordReview(certId, record) {
+  reviewRegistry.reviews[certId] = record;
+  // Keep the registry from growing unbounded — retain the most recent 5,000 records.
+  const ids = Object.keys(reviewRegistry.reviews);
+  if (ids.length > 5000) {
+    ids.sort((a, b) => (reviewRegistry.reviews[a].timestamp < reviewRegistry.reviews[b].timestamp ? -1 : 1));
+    for (const old of ids.slice(0, ids.length - 5000)) delete reviewRegistry.reviews[old];
+  }
+  saveReviews();
+}
+
+function getReview(certId) {
+  if (!certId) return null;
+  return reviewRegistry.reviews[certId.toUpperCase().trim()] || null;
+}
+
+function getUserReviews(userId, limit = 15) {
+  return Object.entries(reviewRegistry.reviews)
+    .filter(([, r]) => r.userId === userId)
+    .sort((a, b) => (a[1].timestamp < b[1].timestamp ? 1 : -1))
+    .slice(0, limit)
+    .map(([id, r]) => ({ certId: id, ...r }));
+}
+
+// ── Certificate PDF (only minted on a pass) ──
+async function buildCertificatePdf(record) {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595, 420]); // A5-ish landscape
+  const { width, height } = page.getSize();
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const reg = await doc.embedFont(StandardFonts.Helvetica);
+  const cherry = rgb(238 / 255, 22 / 255, 79 / 255);
+  const wine = rgb(131 / 255, 20 / 255, 61 / 255);
+  const ink = rgb(58 / 255, 58 / 255, 55 / 255);
+
+  // Cherry header band
+  page.drawRectangle({ x: 0, y: height - 70, width, height: 70, color: cherry });
+  page.drawText("HiBob Brand Review", { x: 30, y: height - 45, size: 22, font: bold, color: rgb(1, 1, 1) });
+  page.drawText("CLEARED FOR LIVE", { x: width - 210, y: height - 45, size: 16, font: bold, color: rgb(1, 1, 1) });
+
+  // Body
+  let y = height - 110;
+  const line = (label, value, opts = {}) => {
+    page.drawText(label, { x: 30, y, size: 10, font: reg, color: ink });
+    page.drawText(String(value), { x: 190, y, size: opts.big ? 14 : 11, font: opts.big ? bold : reg, color: opts.color || ink });
+    y -= opts.gap || 26;
+  };
+  line("Certificate ID", record.certId, { big: true, color: wine });
+  line("Asset", record.fileName);
+  line("Submitted by", record.userName || record.userId);
+  line("Reviewed", new Date(record.timestamp).toLocaleString());
+  line("Overall score", `${record.overall} / 100`, { big: true, color: cherry });
+
+  // Tier breakdown
+  page.drawText("Tier breakdown", { x: 30, y, size: 10, font: bold, color: ink });
+  y -= 18;
+  const tiers = [
+    ["Colors", record.scores.colors],
+    ["Fonts", record.scores.fonts],
+    ["Imagery", record.scores.imagery],
+    ["Composition", record.scores.composition],
+    ["Design bar", record.scores.design_bar],
+  ];
+  let tx = 30;
+  for (const [name, sc] of tiers) {
+    page.drawText(`${name}: ${sc}`, { x: tx, y, size: 10, font: reg, color: ink });
+    tx += 110;
+  }
+  y -= 34;
+
+  // Footer / verification
+  page.drawLine({ start: { x: 30, y: y + 8 }, end: { x: width - 30, y: y + 8 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+  page.drawText(`Verify in BrandBot:  verify ${record.certId}`, { x: 30, y: y - 6, size: 9, font: reg, color: ink });
+  page.drawText(`Guidelines version ${record.guidelinesVersion}`, { x: 30, y: y - 20, size: 8, font: reg, color: rgb(0.5, 0.5, 0.5) });
+
+  return Buffer.from(await doc.save());
+}
+
+// ── Slack block rendering for the result ──
+function bar(score) {
+  const filled = Math.round(score / 10);
+  return "█".repeat(filled) + "░".repeat(10 - filled);
+}
+function gateTag(gate, deterministic) {
+  if (gate === "fail") return deterministic ? "  :no_entry: gate FAILED" : "";
+  if (gate === "pass" && deterministic) return "  :lock: gated";
+  return "";
+}
+function buildResultBlocks(result, certId, offerBrief, requestId) {
+  const d = result.detail;
+  const lines = [];
+  lines.push(`${result.bandEmoji} *${result.bandLabel}* — overall *${result.overall}/100*`);
+  if (result.cleared) lines.push(`Certificate issued: *${certId}*`);
+  else lines.push(`Reference: *${certId}* (this is _not_ a go-live certificate)`);
+  lines.push("");
+
+  const row = (label, score, detail) => {
+    lines.push(`\`${bar(score)}\` *${label}* ${score}${detail.gate ? gateTag(detail.gate, detail.deterministic) : ""}`);
+    (detail.findings || []).slice(0, 2).forEach((f) => lines.push(`      • ${f}`));
+  };
+  row("Colors", result.scores.colors, d.colors);
+  row("Fonts", result.scores.fonts, d.fonts);
+  row("Imagery", result.scores.imagery, d.imagery);
+  row("Composition", result.scores.composition, d.composition);
+  row("Design bar", result.scores.design_bar, d.design_bar);
+  lines.push("");
+  lines.push(`_${d.overall_read}_`);
+  if (result.gateFailed) lines.push(`\n:no_entry: A hard gate failed — this cannot go live regardless of the other scores.`);
+
+  const blocks = [{ type: "section", text: { type: "mrkdwn", text: lines.join("\n") } }];
+  if (offerBrief) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "actions",
+      elements: [{
+        type: "button",
+        text: { type: "plain_text", text: "Start a Creative Brief" },
+        style: "primary",
+        action_id: "open_brief_modal",
+        value: requestId,
+      }],
+    });
+  }
+  return blocks;
+}
+
+const REVIEWABLE_EXT = /\.(png|jpe?g|webp|gif|pdf)$/i;
+const REVIEWABLE_MIME = /^(image\/(png|jpe?g|webp|gif)|application\/pdf)$/i;
+function isReviewableFile(file) {
+  return REVIEWABLE_MIME.test(file.mimetype || "") || REVIEWABLE_EXT.test(file.name || "");
+}
+
+async function downloadSlackFile(client, file) {
+  const info = await client.files.info({ file: file.id });
+  const url = info.file.url_private_download || info.file.url_private;
+  if (!url) throw new Error("no download URL");
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` } });
+  if (!res.ok) throw new Error(`slack download ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// ── Orchestrator: called from the message handler when a reviewable file arrives ──
+async function handleBrandReview({ userId, files, userGuidance, say, client, channelId }) {
+  const reviewable = files.filter(isReviewableFile);
+  if (!reviewable.length) {
+    await say(
+      "I can review PNG, JPG, WEBP, GIF, or PDF files against the HiBob brand. That file type isn't one I can open — export it as a PNG or PDF and send it again."
+    );
+    return;
+  }
+  const file = reviewable[0]; // review one asset per submission (clearest for certification)
+  if (reviewable.length > 1) {
+    await say(`I'll review *${file.name}* — send files one at a time so each gets its own certificate.`);
+  }
+
+  const thinking = await say(`:hourglass_flowing_sand: Reviewing *${file.name}* against the HiBob brand — colours, fonts, imagery, composition, and the design bar…`);
+
+  try {
+    const buffer = await downloadSlackFile(client, file);
+    const model = process.env.OPENAI_MODEL || "gpt-4o";
+    const result = await review.runBrandReview({
+      openai, model,
+      fileBuffer: buffer,
+      fileName: file.name,
+      mimeType: file.mimetype || "",
+      userGuidance,
+    });
+
+    const certId = generateCertId();
+    const profile = await getSlackUserInfo(client, userId).catch(() => null);
+    const userName = profile?.name || null;
+
+    const record = {
+      certId,
+      fileName: file.name,
+      mime: file.mimetype || "",
+      userId,
+      userName,
+      timestamp: new Date().toISOString(),
+      guidelinesVersion: result.guidelinesVersion,
+      scores: result.scores,
+      gates: result.gates,
+      overall: result.overall,
+      band: result.band,
+      verdict: result.bandLabel,
+      cleared: result.cleared,
+      pageCount: result.pageCount,
+      overallRead: result.detail.overall_read,
+    };
+    recordReview(certId, record);
+
+    // Offer a brief handoff on the two low bands (offer, not auto-route).
+    const offerBrief = result.band === "major" || result.band === "not_on_brand";
+    let requestId = null;
+    if (offerBrief) {
+      requestId = `req_${userId}_${Date.now()}`;
+      pendingRequests[requestId] = {
+        userId,
+        toolCall: { summary: `Review follow-up: ${file.name}` },
+        conversationSummary: `Failed brand review ${certId} (${result.bandLabel})`,
+        channel: channelId,
+        formType: "brief",
+      };
+    }
+
+    // Deliver: cleared → certificate PDF; otherwise → feedback report only.
+    if (result.cleared) {
+      const certPdf = await buildCertificatePdf(record);
+      await client.files.uploadV2({
+        channel_id: channelId,
+        file: certPdf,
+        filename: `Brand-Cert-${certId}.pdf`,
+        title: `Brand Review Certificate ${certId}`,
+        initial_comment: `:white_check_mark: *${file.name}* is cleared for live.`,
+      });
+    }
+    await say({ blocks: buildResultBlocks(result, certId, offerBrief, requestId), text: `${result.bandLabel} — ${result.overall}/100 (${certId})` });
+
+    // Analytics + ops feed
+    trackEvent("brand_review", userId, { fileName: file.name, band: result.band, overall: result.overall, cleared: result.cleared, certId });
+    postAnalytics(
+      `:framed_picture: *Brand review* by <@${userId}>\n` +
+      `Asset: *${file.name}* → ${result.bandEmoji} *${result.bandLabel}* (${result.overall}/100)\n` +
+      `Cert: \`${certId}\`${result.gateFailed ? " — :no_entry: gate failed" : ""}`
+    );
+  } catch (err) {
+    console.error("[REVIEW] Failed:", err);
+    if (/pdf-to-img|Cannot find module|ERR_MODULE/.test(err.message || "")) {
+      await say(":warning: I couldn't process that PDF (PDF support may not be enabled on this deploy). Export the artwork as a PNG or JPG and send it again — image review is fully supported.");
+    } else {
+      await say("Something went wrong running that review. Mind trying again, or send the file as a PNG/JPG?");
+    }
+  }
+}
+
 // sessions[userId] = { messages: [...], lastActivity: timestamp }
 // ────────────────────────────────────────────
 // Session store — real conversation history
@@ -4066,6 +4340,34 @@ const ADMIN_COMMANDS = {
   },
   "tasks digest": async () => buildDailyTaskDigest(),
   "task digest": async () => buildDailyTaskDigest(),
+
+  // ── Brand review stats ──
+  "review stats": async () => {
+    const all = Object.values(reviewRegistry.reviews);
+    if (!all.length) return "No brand reviews recorded yet.";
+    const cutoff = new Date(Date.now() - 90 * 86400000).toISOString();
+    const recent = all.filter((r) => r.timestamp >= cutoff);
+    const byBand = {};
+    recent.forEach((r) => { byBand[r.verdict] = (byBand[r.verdict] || 0) + 1; });
+    const cleared = recent.filter((r) => r.cleared).length;
+    const passRate = recent.length ? Math.round((cleared / recent.length) * 100) : 0;
+    // Which tiers fail most (avg score per tier, lowest first)
+    const tierAvg = {};
+    ["colors", "fonts", "imagery", "composition", "design_bar"].forEach((t) => {
+      tierAvg[t] = Math.round(recent.reduce((s, r) => s + (r.scores?.[t] || 0), 0) / recent.length);
+    });
+    const lines = [
+      `*Brand review stats — last 90 days*`,
+      `Total reviews: ${recent.length} · Cleared for live: ${cleared} · Pass rate: *${passRate}%*`,
+      ``,
+      `*By outcome:*`,
+      ...Object.entries(byBand).sort((a, b) => b[1] - a[1]).map(([k, v]) => `• ${k}: ${v}`),
+      ``,
+      `*Average score by tier* (lowest = biggest problem area):`,
+      ...Object.entries(tierAvg).sort((a, b) => a[1] - b[1]).map(([k, v]) => `• ${k.replace(/_/g, " ")}: ${v}`),
+    ];
+    return lines.join("\n");
+  },
 };
 
 // ────────────────────────────────────────────
@@ -4167,7 +4469,20 @@ app.message(async ({ message, say: _say, client }) => {
         trackEvent("file_attached", userId, { taskName: pendingUpload.taskName, filesAttached: attached, filesSent: fileCount });
         return;
       }
-      // No pending upload — treat as a normal message (the LLM can't process files yet)
+      // No pending Asana attachment window open → this is a brand-review request.
+      const hasReviewable = message.files.some(isReviewableFile);
+      if (hasReviewable) {
+        // Gate to users who can access the bot (admin/full/limited).
+        if (getUserTier(userId) === "none") {
+          await say("Hi! Brand review is available to approved teams. If you need access, reach out to Brand Services.");
+          return;
+        }
+        // A caption on the file becomes extra review guidance for the model.
+        const caption = (message.text || "").trim();
+        await handleBrandReview({ userId, files: message.files, userGuidance: caption || null, say, client, channelId: message.channel });
+        return;
+      }
+      // Non-reviewable file with no pending upload — fall through to normal handling.
     }
 
     // "reset onboarding" — admin convenience alias
@@ -4337,6 +4652,40 @@ app.message(async ({ message, say: _say, client }) => {
         });
       }
 
+      await say(lines.join("\n"));
+      return;
+    }
+
+    // "verify BR-..." — look up a brand review certificate/record (any user)
+    if (textLower.startsWith("verify ")) {
+      const certId = text.replace(/^verify\s+/i, "").trim();
+      const rec = getReview(certId);
+      if (!rec) {
+        await say(`No review record found for \`${certId.toUpperCase()}\`. If work claims to be brand-approved but has no valid record here, it did not pass review.`);
+        return;
+      }
+      const stale = rec.guidelinesVersion !== review.GUIDELINES_VERSION;
+      const lines = [
+        rec.cleared ? `:white_check_mark: *${rec.certId}* — Cleared for Live` : `:red_circle: *${rec.certId}* — ${rec.verdict} (NOT cleared for live)`,
+        `Asset: *${rec.fileName}*`,
+        `Submitted by: ${rec.userName ? rec.userName : `<@${rec.userId}>`}`,
+        `Reviewed: ${new Date(rec.timestamp).toLocaleString()}`,
+        `Overall: *${rec.overall}/100* — Colors ${rec.scores.colors} · Fonts ${rec.scores.fonts} · Imagery ${rec.scores.imagery} · Composition ${rec.scores.composition} · Design bar ${rec.scores.design_bar}`,
+      ];
+      if (stale) lines.push(`:warning: Reviewed against guidelines *${rec.guidelinesVersion}* (current is ${review.GUIDELINES_VERSION}) — consider re-review.`);
+      await say(lines.join("\n"));
+      return;
+    }
+
+    // "my reviews" — a user's own review history
+    if (textLower === "my reviews") {
+      const mine = getUserReviews(userId);
+      if (!mine.length) { await say("You haven't submitted anything for brand review yet. Drop a PNG, JPG, or PDF in here and I'll review it."); return; }
+      const lines = ["*Your brand reviews*"];
+      for (const r of mine) {
+        const icon = r.cleared ? ":white_check_mark:" : ":red_circle:";
+        lines.push(`${icon} \`${r.certId}\` — *${r.fileName}* — ${r.overall}/100 (${r.verdict})`);
+      }
       await say(lines.join("\n"));
       return;
     }
